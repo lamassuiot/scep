@@ -1,5 +1,7 @@
 module github.com/micromdm/scep
 
+go 1.14
+
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/fullsailor/pkcs7 v0.0.0-20170716202841-43549d8ee32d
