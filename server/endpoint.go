@@ -3,6 +3,7 @@ package scepserver
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -105,7 +106,7 @@ func MakeServerEndpoints(svc Service) *Endpoints {
 // MakeClientEndpoints returns an Endpoints struct where each endpoint invokes
 // the corresponding method on the remote instance, via a transport/http.Client.
 // Useful in a SCEP client.
-func MakeClientEndpoints(instance string) (*Endpoints, error) {
+func MakeClientEndpoints(instance string, client *http.Client) (*Endpoints, error) {
 	if !strings.HasPrefix(instance, "http") {
 		instance = "http://" + instance
 	}
@@ -114,7 +115,9 @@ func MakeClientEndpoints(instance string) (*Endpoints, error) {
 		return nil, err
 	}
 
-	options := []httptransport.ClientOption{}
+	options := []httptransport.ClientOption{
+		httptransport.SetClient(client),
+	}
 
 	return &Endpoints{
 		GetEndpoint: httptransport.NewClient(
