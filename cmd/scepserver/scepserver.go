@@ -26,8 +26,8 @@ import (
 	"github.com/micromdm/scep/csrverifier"
 	executablecsrverifier "github.com/micromdm/scep/csrverifier/executable"
 	"github.com/micromdm/scep/depot"
+	"github.com/micromdm/scep/depot/relational"
 	scepserver "github.com/micromdm/scep/server"
-	"github.com/mikelamutxastegi/depot/relational"
 )
 
 // version info
@@ -98,7 +98,7 @@ func main() {
 	{
 		//depot, err = file.NewFileDepot(*flDepotPath)
 		dbURL := "postgres://scep:scep@localhost/ca_store?sslmode=disable"
-		depot, err = relational.NewRelationalDepot("postgres", dbURL)
+		depot, err = relational.NewRelationalDepot("postgres", dbURL, *flDepotPath)
 		if err != nil {
 			lginfo.Log("err", err)
 			os.Exit(1)

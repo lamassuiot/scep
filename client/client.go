@@ -20,11 +20,7 @@ type Client interface {
 
 // New creates a SCEP Client.
 func New(serverURL string, logger log.Logger) (Client, error) {
-	client, err := createClientTLSTransport()
-	if err != nil {
-		return nil, err
-	}
-	endpoints, err := scepserver.MakeClientEndpoints(serverURL, client)
+	endpoints, err := scepserver.MakeClientEndpoints(serverURL)
 	if err != nil {
 		return nil, err
 	}

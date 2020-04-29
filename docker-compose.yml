@@ -1,0 +1,17 @@
+version: '3'
+services:
+
+  scepdb:
+    image: 'postgres:latest'
+    environment:
+      POSTGRES_DB: '${SCEP_POSTGRESDB}'
+      POSTGRES_USER: '${SCEP_POSTGRESUSER}'
+      POSTGRES_PASSWORD: '${SCEP_POSTGRESPASSWORD}'
+    volumes:
+      - 'scep_pg_data:/var/lib/postgresql/data'
+      - './create.sql:/docker-entrypoint-initdb.d/create.sql'
+    ports:
+      - '5432:5432'
+      
+volumes:
+  scep_pg_data: null

@@ -12,6 +12,8 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -21,6 +23,16 @@ type relationalDB struct {
 	db      *sql.DB
 	dirPath string
 }
+
+type file struct {
+	Info os.FileInfo
+	Data []byte
+}
+
+const (
+	rsaPrivateKeyPEMBlockType = "RSA PRIVATE KEY"
+	certificatePEMBlockType   = "CERTIFICATE"
+)
 
 func NewRelationalDepot(driverName string, dataSourceName string, dirPath string) (*relationalDB, error) {
 	db, err := sql.Open(driverName, dataSourceName)
@@ -70,28 +82,45 @@ func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
 	if crt.Raw == nil {
 		return errors.New("data is nil")
 	}
+	if _, err := rlDB.HasCN(cn, 0, crt, true); err != nil {
+		return err
+	}
 
 	data := crt.Raw
-	cert := pemCert(data)
 	dn := makeDn(crt)
 	expirationDate := makeOpenSSLTime(crt.NotAfter)
+	name := rlDB.path(cn) + "." + crt.SerialNumber.String() + ".pem"
 
 	sqlStatement := `
 
-	INSERT INTO ca_store(status, expirationDate, revocationDate, serial, dn, cert)
-	VALUES($1, $2, $3, $4, $5);
+	INSERT INTO ca_store(status, expirationDate, revocationDate, serial, dn, certPath)
+	VALUES($1, $2, $3, $4, $5, $6)
+	RETURNING serial;
 	`
-	err := rlDB.QueryRow(sqlStatement, expirationDate, nil, dn, crt.SerialNumber, string(cert))
-	i
-	
-	f err != nil {
+	serial := 0
+
+	err := rlDB.db.QueryRow(sqlStatement, "V", expirationDate, "", crt.SerialNumber.Int64(), dn, name).Scan(&serial)
+
+	if err != nil {
 		return err
 	}
+
+	file, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0444)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := file.Write(pemCert(data)); err != nil {
+		os.Remove(name)
+		return err
+	}
+
 	return nil
 }
 
 func (rlDB *relationalDB) Serial() (*big.Int, error) {
-	s := big.NewInt(2)
+	var serial int64
 
 	sqlStatement := `
 	SELECT serial
@@ -99,14 +128,20 @@ func (rlDB *relationalDB) Serial() (*big.Int, error) {
 	ORDER BY serial DESC
 	LIMIT 1;
 	`
-	row := rlDB.QueryRow(sqlStatement)
-	err := row.Scan(&s)
 
+	row := rlDB.db.QueryRow(sqlStatement)
+	err := row.Scan(&serial)
+
+	//If there are not certificates stored, the serial does not exist, so create new one.
 	if err != nil {
-		nil, err
+		fmt.Println(err)
+		return big.NewInt(2), nil
 	}
 
-	return s, err
+	s := big.NewInt(serial)
+	s = s.Add(s, big.NewInt(1))
+
+	return s, nil
 }
 
 func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate, revokeOldCertificate bool) (bool, error) {
@@ -119,62 +154,75 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 	`
 
 	type caItem struct {
-		status string
+		status         string
 		expirationDate string
 		revocationDate string
-		serial *big.Int
-		dn string
-		cert string
+		serial         *big.Int
+		dn             string
+		certPath       string
 	}
-	
-	candidates := make(map[string]string)
-	rows, err := rlDB.Query(sqlStatement, dn)
+
+	rows, err := rlDB.db.Query(sqlStatement, dn)
 	if err != nil {
-		nil, err
+		return false, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var caItem caItem
-		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &caItem.serial, &caItem.dn, &caItem.cert)
+		var serial int64
+		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &serial, &caItem.dn, &caItem.certPath)
+		if err != nil {
+			return false, err
+		}
+		caItem.serial = big.NewInt(serial)
 		if caItem.status == "V" {
 			issueDate, err := strconv.ParseInt(strings.Replace(caItem.expirationDate, "Z", "", 1), 10, 64)
 			if err != nil {
 				return false, errors.New("Could not get expiry date from ca db")
 			}
 			minimalRenewDate, err := strconv.ParseInt(strings.Replace(makeOpenSSLTime(time.Now().AddDate(0, 0, allowTime).UTC()), "Z", "", 1), 10, 64)
-			
+
 			if minimalRenewDate < issueDate && allowTime > 0 {
 				return false, errors.New("DN " + dn + " already exists")
-			} else {
-				if revokeOldCertificate {
-					rlDB.revokeCertificate(caItem.serial, caItem.dn)
+			}
+			if revokeOldCertificate {
+				fmt.Println("Revoking certificate with serial " + strconv.FormatInt(caItem.serial.Int64(), 10) + " from DB. Recreation of CRL needed.")
+				err = rlDB.revokeCertificate(caItem.serial, caItem.dn)
+				if err != nil {
+					return false, err
 				}
-			}	
+			}
 		}
 	}
+	return true, nil
 }
 
-func (rlDB *relationalDB) revokeCertificate(serial *big.Int, dn string) error{
+func (rlDB *relationalDB) revokeCertificate(serial *big.Int, dn string) error {
 	sqlStatement := `
 	UPDATE ca_store
-	SET status = "R"
+	SET status = 'R'
 	WHERE serial = $1 AND dn = $2;
 	`
 
-	res, err := rlDB.Exec(sqlStatement, serial, dn)
+	res, err := rlDB.db.Exec(sqlStatement, serial.Int64(), dn)
 
 	if err != nil {
 		return err
 	}
 
-	if res.RowsAffected() <= 0 {
+	rowsAffected, err := res.RowsAffected()
+
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected <= 0 {
 		return errors.New("No rows updated")
 	}
 
 	return nil
 }
-
 
 // load an encrypted private key from disk
 func loadKey(data []byte, password []byte) (*rsa.PrivateKey, error) {
