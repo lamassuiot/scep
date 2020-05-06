@@ -201,11 +201,11 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 func (rlDB *relationalDB) revokeCertificate(serial *big.Int, dn string) error {
 	sqlStatement := `
 	UPDATE ca_store
-	SET status = 'R'
-	WHERE serial = $1 AND dn = $2;
+	SET status = 'R', revocationDate = $1
+	WHERE serial = $2 AND dn = $3;
 	`
 
-	res, err := rlDB.db.Exec(sqlStatement, serial.Int64(), dn)
+	res, err := rlDB.db.Exec(sqlStatement, makeOpenSSLTime(time.Now()), serial.Int64(), dn)
 
 	if err != nil {
 		return err
