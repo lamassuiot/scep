@@ -97,8 +97,8 @@ func main() {
 	var depot depot.Depot // cert storage
 	{
 		//depot, err = file.NewFileDepot(*flDepotPath)
-		dbURL := "postgres://scep:scep@localhost/ca_store?sslmode=disable"
-		depot, err = relational.NewRelationalDepot("postgres", dbURL, *flDepotPath)
+		connStr := "dbname=ca_store user=scep password=scep host=localhost port=5433 sslmode=disable"
+		depot, err = relational.NewRelationalDepot("postgres", connStr, *flDepotPath)
 		if err != nil {
 			lginfo.Log("err", err)
 			os.Exit(1)

@@ -13,6 +13,7 @@
             "env": {},
             "args": [
                 "-depot", "/home/mamuchastegui/go/src/github.com/micromdm/scep/dummy_ca",
+                "-port", "8081",
                 //"-depot", "/home/mamuchastegui/go/src/github.com/micromdm/scep/cmd/scepserver",
                 //"-allowrenew", "0",
                 "-capass", "prueba"
@@ -26,7 +27,7 @@
             "program": "${workspaceFolder}/cmd/scepclient",
             "env": {},
             "args": [
-                "-server-url", "http://localhost:8080/scep",
+                "-server-url", "http://localhost:8081/scep",
                 //"-certificate", "/home/mamuchastegui/go/src/github.com/micromdm/scep/build/client.pem",
                 "-private-key", "/home/mamuchastegui/go/src/github.com/micromdm/scep/build/key.pem"
             ]
