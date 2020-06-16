@@ -17,11 +17,13 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/micromdm/scep/secrets"
 )
 
 type relationalDB struct {
 	db      *sql.DB
 	dirPath string
+	secrets secrets.Secrets
 }
 
 type file struct {
@@ -34,7 +36,7 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewRelationalDepot(driverName string, dataSourceName string, dirPath string) (*relationalDB, error) {
+func NewRelationalDepot(driverName string, dataSourceName string, secrets secrets.Secrets) (*relationalDB, error) {
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
@@ -45,7 +47,7 @@ func NewRelationalDepot(driverName string, dataSourceName string, dirPath string
 		err = checkDBAlive(db)
 	}
 
-	return &relationalDB{db: db, dirPath: dirPath}, nil
+	return &relationalDB{db: db, secrets: secrets}, nil
 }
 
 func checkDBAlive(db *sql.DB) error {
@@ -56,19 +58,11 @@ func checkDBAlive(db *sql.DB) error {
 }
 
 func (rlDB *relationalDB) CA(pass []byte) ([]*x509.Certificate, *rsa.PrivateKey, error) {
-	caPEM, err := rlDB.getFile("ca.pem")
+	err := rlDB.secrets.Login()
 	if err != nil {
 		return nil, nil, err
 	}
-	cert, err := loadCert(caPEM.Data)
-	if err != nil {
-		return nil, nil, err
-	}
-	keyPEM, err := rlDB.getFile("ca.key")
-	if err != nil {
-		return nil, nil, err
-	}
-	key, err := loadKey(keyPEM.Data, pass)
+	cert, key, err := rlDB.secrets.GetSecret("ca")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -255,6 +249,8 @@ func loadCert(data []byte) (*x509.Certificate, error) {
 }
 
 func (rlDB *relationalDB) getFile(path string) (*file, error) {
+	// Vault KV call
+
 	if err := rlDB.check(path); err != nil {
 		return nil, err
 	}

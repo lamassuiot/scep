@@ -1,6 +1,21 @@
 version: '3'
 services:
-
+  scepproxy:
+    build: './proxy'
+    ports:
+      - '89:80'
+      - '443:443'
+    volumes:
+      - './ca:/etc/nginx/certs/client'
+  scepserver:
+    build: '.'
+    environment:
+      CERT_VALID_PERIOD: '${CERT_VALID_PERIOD}'
+      CA_CERT_FILE: '${CA_CERT_FILE}'
+      CA_KEY_FILE: '${CA_KEY_FILE}'
+    ports:
+      - '8088:8080'
+    command: -crtvalid $CERT_VALID_PERIOD -cacert $CA_CERT_FILE -cakey $CA_KEY_FILE
   scepdb:
     image: 'postgres:latest'
     environment:
