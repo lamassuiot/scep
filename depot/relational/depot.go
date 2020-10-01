@@ -17,13 +17,11 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/micromdm/scep/secrets"
 )
 
 type relationalDB struct {
 	db      *sql.DB
 	dirPath string
-	secrets secrets.Secrets
 }
 
 type file struct {
@@ -36,7 +34,7 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewRelationalDepot(driverName string, dataSourceName string, secrets secrets.Secrets) (*relationalDB, error) {
+func NewRelationalDepot(driverName string, dataSourceName string) (*relationalDB, error) {
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
@@ -47,7 +45,7 @@ func NewRelationalDepot(driverName string, dataSourceName string, secrets secret
 		err = checkDBAlive(db)
 	}
 
-	return &relationalDB{db: db, secrets: secrets}, nil
+	return &relationalDB{db: db}, nil
 }
 
 func checkDBAlive(db *sql.DB) error {
@@ -55,18 +53,6 @@ func checkDBAlive(db *sql.DB) error {
 	SELECT WHERE 1=0`
 	_, err := db.Query(sqlStatement)
 	return err
-}
-
-func (rlDB *relationalDB) CA(pass []byte) ([]*x509.Certificate, *rsa.PrivateKey, error) {
-	err := rlDB.secrets.Login()
-	if err != nil {
-		return nil, nil, err
-	}
-	cert, key, err := rlDB.secrets.GetSecret("ca")
-	if err != nil {
-		return nil, nil, err
-	}
-	return []*x509.Certificate{cert}, key, nil
 }
 
 func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {

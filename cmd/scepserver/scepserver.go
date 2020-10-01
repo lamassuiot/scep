@@ -27,9 +27,13 @@ import (
 	executablecsrverifier "github.com/micromdm/scep/csrverifier/executable"
 	"github.com/micromdm/scep/depot"
 	"github.com/micromdm/scep/depot/relational"
-	"github.com/micromdm/scep/secrets"
-	"github.com/micromdm/scep/secrets/vault"
 	scepserver "github.com/micromdm/scep/server"
+
+	casecrets "github.com/micromdm/scep/secrets/ca"
+	"github.com/micromdm/scep/secrets/ca/vault"
+
+	scepsecrets "github.com/micromdm/scep/secrets/scep"
+	"github.com/micromdm/scep/secrets/scep/file"
 )
 
 // version info
@@ -53,10 +57,10 @@ func main() {
 	var (
 		flVersion           = flag.Bool("version", false, "prints version information")
 		flPort              = flag.String("port", envString("SCEP_HTTP_LISTEN_PORT", "8080"), "port to listen on")
+		flDepotPath         = flag.String("depot", envString("SCEP_FILE_DEPOT", "depot"), "path to ca folder")
 		flVaultAddress      = flag.String("vaultaddress", envString("SCEP_VAULT_ADDRESS", "vault"), "vault address")
 		flRoleID            = flag.String("roleid", envString("SCEP_ROLE_ID", ""), "vault RoleID")
 		flSecretID          = flag.String("secretid", envString("SCEP_SECRET_ID", ""), "vault SecretID")
-		flCAPass            = flag.String("capass", envString("SCEP_CA_PASS", ""), "passwd for the ca.key")
 		flClDuration        = flag.String("crtvalid", envString("SCEP_CERT_VALID", "365"), "validity for new client certificates in days")
 		flClAllowRenewal    = flag.String("allowrenew", envString("SCEP_CERT_RENEW", "14"), "do not allow renewal until n days before expiry, set to 0 to always allow")
 		flChallengePassword = flag.String("challenge", envString("SCEP_CHALLENGE_PASSWORD", ""), "enforce a challenge password")
@@ -99,20 +103,28 @@ func main() {
 
 	var err error
 
-	var secrets secrets.Secrets
+	var caSecrets casecrets.CASecrets
 	{
-		secrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID)
+		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID)
 		if err != nil {
 			lginfo.Log("err", err)
 			os.Exit(1)
 		}
 	}
 
+	var scepSecrets scepsecrets.SCEPSecrets
+	{
+		scepSecrets, err = file.NewFileSCEPSecrets(*flDepotPath)
+		if err != nil {
+			lginfo.Log("err", err)
+			os.Exit(1)
+		}
+	}
 	var depot depot.Depot // cert storage
 	{
 		//depot, err = file.NewFileDepot(*flDepotPath)
 		connStr := "dbname=ca_store user=scep password=scep host=localhost port=5433 sslmode=disable"
-		depot, err = relational.NewRelationalDepot("postgres", connStr, secrets)
+		depot, err = relational.NewRelationalDepot("postgres", connStr)
 		if err != nil {
 			lginfo.Log("err", err)
 			os.Exit(1)
@@ -143,12 +155,11 @@ func main() {
 		svcOptions := []scepserver.ServiceOption{
 			scepserver.ChallengePassword(*flChallengePassword),
 			scepserver.WithCSRVerifier(csrVerifier),
-			scepserver.CAKeyPassword([]byte(*flCAPass)),
 			scepserver.ClientValidity(clientValidity),
 			scepserver.AllowRenewal(allowRenewal),
 			scepserver.WithLogger(logger),
 		}
-		svc, err = scepserver.NewService(depot, svcOptions...)
+		svc, err = scepserver.NewService(depot, caSecrets, scepSecrets, svcOptions...)
 		if err != nil {
 			lginfo.Log("err", err)
 			os.Exit(1)

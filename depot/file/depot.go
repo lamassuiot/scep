@@ -33,26 +33,6 @@ type fileDepot struct {
 	dirPath string
 }
 
-func (d *fileDepot) CA(pass []byte) ([]*x509.Certificate, *rsa.PrivateKey, error) {
-	caPEM, err := d.getFile("ca.pem")
-	if err != nil {
-		return nil, nil, err
-	}
-	cert, err := loadCert(caPEM.Data)
-	if err != nil {
-		return nil, nil, err
-	}
-	keyPEM, err := d.getFile("ca.key")
-	if err != nil {
-		return nil, nil, err
-	}
-	key, err := loadKey(keyPEM.Data, pass)
-	if err != nil {
-		return nil, nil, err
-	}
-	return []*x509.Certificate{cert}, key, nil
-}
-
 // file permissions
 const (
 	certPerm   = 0444

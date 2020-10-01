@@ -9,13 +9,14 @@ import (
 	"encoding/asn1"
 	"errors"
 	"math/big"
-	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/micromdm/scep/challenge"
 	"github.com/micromdm/scep/csrverifier"
 	"github.com/micromdm/scep/depot"
 	"github.com/micromdm/scep/scep"
+	casecrets "github.com/micromdm/scep/secrets/ca"
+	scepsecrets "github.com/micromdm/scep/secrets/scep"
 )
 
 // Service is the interface for all supported SCEP server operations.
@@ -41,6 +42,8 @@ type Service interface {
 
 type service struct {
 	depot                   depot.Depot
+	caSecrets               casecrets.CASecrets
+	scepSecrets             scepsecrets.SCEPSecrets
 	ca                      []*x509.Certificate // CA cert or chain
 	caKey                   *rsa.PrivateKey
 	caKeyPassword           []byte
@@ -70,14 +73,16 @@ func (svc *service) GetCACaps(ctx context.Context) ([]byte, error) {
 	return defaultCaps, nil
 }
 
+// Vault API call to obtain CA cert
 func (svc *service) GetCACert(ctx context.Context) ([]byte, int, error) {
-	if len(svc.ca) == 0 {
-		return nil, 0, errors.New("missing CA Cert")
+	scepCA, err := svc.scepSecrets.GetCACert()
+	if len(scepCA) == 0 {
+		return nil, 0, err
 	}
-	if len(svc.ca) == 1 {
-		return svc.ca[0].Raw, 1, nil
+	if len(scepCA) == 1 {
+		return scepCA[0].Raw, 1, nil
 	}
-	data, err := scep.DegenerateCertificates(svc.ca)
+	data, err := scep.DegenerateCertificates(scepCA)
 	return data, len(svc.ca), err
 }
 
@@ -86,8 +91,15 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	ca := svc.ca[0]
-	if err := msg.DecryptPKIEnvelope(svc.ca[0], svc.caKey); err != nil {
+	scepCA, err := svc.scepSecrets.GetCACert()
+	if err != nil {
+		return nil, errors.New("unable to get SCEP CA Cert")
+	}
+	scepCAKey, err := svc.scepSecrets.GetCAKey()
+	if err != nil {
+		return nil, errors.New("unable to get CA Key")
+	}
+	if err := msg.DecryptPKIEnvelope(scepCA[0], scepCAKey); err != nil {
 		return nil, err
 	}
 
@@ -112,7 +124,7 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 		}
 
 		if !CSRIsValid {
-			certRep, err := msg.Fail(ca, svc.caKey, scep.BadRequest)
+			certRep, err := msg.Fail(scepCA[0], scepCAKey, scep.BadRequest)
 			if err != nil {
 				return nil, err
 			}
@@ -121,8 +133,9 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 	}
 
 	csr := msg.CSRReqMessage.CSR
-	id, err := generateSubjectKeyID(csr.PublicKey)
+	/*id, err := generateSubjectKeyID(csr.PublicKey)
 	if err != nil {
+
 		return nil, err
 	}
 
@@ -145,9 +158,10 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 			x509.ExtKeyUsageClientAuth,
 		},
 		SignatureAlgorithm: csr.SignatureAlgorithm,
-	}
+	}*/
 
-	certRep, err := msg.SignCSR(ca, svc.caKey, tmpl)
+	//Change this method to sign CSR with Vault CA
+	certRep, err := msg.SignCSR(scepCA[0], scepCAKey, csr, svc.caSecrets)
 	if err != nil {
 		return nil, err
 	}
@@ -223,15 +237,6 @@ func ChallengePassword(pw string) ServiceOption {
 	}
 }
 
-// CAKeyPassword is an optional argument to NewService for
-// specifying the CA private key password.
-func CAKeyPassword(pw []byte) ServiceOption {
-	return func(s *service) error {
-		s.caKeyPassword = pw
-		return nil
-	}
-}
-
 // allowRenewal sets the days before expiry which we are allowed to renew (optional)
 func AllowRenewal(duration int) ServiceOption {
 	return func(s *service) error {
@@ -266,9 +271,11 @@ func WithDynamicChallenges(cache challenge.Store) ServiceOption {
 }
 
 // NewService creates a new scep service
-func NewService(depot depot.Depot, opts ...ServiceOption) (Service, error) {
+func NewService(depot depot.Depot, caSecrets casecrets.CASecrets, scepSecrets scepsecrets.SCEPSecrets, opts ...ServiceOption) (Service, error) {
 	s := &service{
 		depot:       depot,
+		caSecrets:   caSecrets,
+		scepSecrets: scepSecrets,
 		debugLogger: log.NewNopLogger(),
 	}
 	for _, opt := range opts {
@@ -277,11 +284,6 @@ func NewService(depot depot.Depot, opts ...ServiceOption) (Service, error) {
 		}
 	}
 
-	var err error
-	s.ca, s.caKey, err = depot.CA(s.caKeyPassword)
-	if err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 

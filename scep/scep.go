@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/micromdm/scep/crypto/x509util"
+	casecrets "github.com/micromdm/scep/secrets/ca"
 )
 
 // errors
@@ -425,7 +426,7 @@ func (msg *PKIMessage) Fail(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKey, 
 
 // SignCSR creates an x509.Certificate based on a template and Cert Authority credentials
 // returns a new PKIMessage with CertRep data
-func (msg *PKIMessage) SignCSR(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKey, template *x509.Certificate) (*PKIMessage, error) {
+func (msg *PKIMessage) SignCSR(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKey, template *x509.CertificateRequest, caSecrets casecrets.CASecrets) (*PKIMessage, error) {
 	// check if CSRReqMessage has already been decrypted
 	if msg.CSRReqMessage.CSR == nil {
 		if err := msg.DecryptPKIEnvelope(crtAuth, keyAuth); err != nil {
@@ -433,7 +434,9 @@ func (msg *PKIMessage) SignCSR(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKe
 		}
 	}
 	// sign the CSR creating a DER encoded cert
-	crtBytes, err := x509.CreateCertificate(rand.Reader, template, crtAuth, msg.CSRReqMessage.CSR.PublicKey, keyAuth)
+	// This should be changed to Vault
+	crtBytes, err := caSecrets.SignCertificate(template)
+	//crtBytes, err := x509.CreateCertificate(rand.Reader, template, crtAuth, msg.CSRReqMessage.CSR.PublicKey, keyAuth)
 	if err != nil {
 		return nil, err
 	}

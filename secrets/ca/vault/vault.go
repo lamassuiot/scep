@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/hashicorp/vault/api"
@@ -26,40 +27,46 @@ func NewVaultSecrets(address string, roleID string, secretID string) (*vaultSecr
 	if err != nil {
 		return nil, err
 	}
+
+	err = Login(client, roleID, secretID)
+	if err != nil {
+		return nil, err
+	}
 	return &vaultSecrets{client: client, roleID: roleID, secretID: secretID}, nil
 }
 
-func (vs *vaultSecrets) Login() error {
+func Login(client *api.Client, roleID string, secretID string) error {
 	loginPath := "auth/approle/login"
 	options := map[string]interface{}{
-		"role_id":   vs.roleID,
-		"secret_id": vs.secretID,
+		"role_id":   roleID,
+		"secret_id": secretID,
 	}
-	resp, err := vs.client.Logical().Write(loginPath, options)
+	resp, err := client.Logical().Write(loginPath, options)
 	if err != nil {
 		return err
 	}
-	vs.client.SetToken(resp.Auth.ClientToken)
+	client.SetToken(resp.Auth.ClientToken)
 	return nil
 }
 
-func (vs *vaultSecrets) GetSecret(secretKey string) (*x509.Certificate, *rsa.PrivateKey, error) {
-	secretPath := "kv/" + secretKey
-	data, err := vs.client.Logical().Read(secretPath)
-	if err != nil {
-		return nil, nil, err
+func (vs *vaultSecrets) SignCertificate(csr *x509.CertificateRequest) ([]byte, error) {
+	signPath := "ca1/sign/ca1"
+	csrBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr.Raw})
+	options := map[string]interface{}{
+		"csr":         string(csrBytes),
+		"common_name": csr.Subject.CommonName,
 	}
-	keyData := data.Data["key"]
-	certData := data.Data["cert"]
-	cert, err := loadCert(certData.(string))
+	data, err := vs.client.Logical().Write(signPath, options)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	key, err := loadKey(keyData.(string))
-	if err != nil {
-		return nil, nil, err
+	certData := data.Data["certificate"]
+	fmt.Println(certData.(string))
+	certPEMBlock, _ := pem.Decode([]byte(certData.(string)))
+	if certPEMBlock == nil || certPEMBlock.Type != "CERTIFICATE" {
+		return nil, errors.New("failed to decode PEM block containing certificate")
 	}
-	return cert, key, nil
+	return certPEMBlock.Bytes, nil
 
 }
 
