@@ -75,7 +75,7 @@ func run(cfg runCfg) error {
 		sigAlgo = x509.SHA256WithRSA
 	}
 
-	key, err := loadOrMakeKey(cfg.keyPath, cfg.keyBits)
+	key, err := loadOrMakeECDSAKey(cfg.keyPath, cfg.keyBits)
 	if err != nil {
 		return err
 	}

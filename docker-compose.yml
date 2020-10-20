@@ -1,21 +1,26 @@
 version: '3'
 services:
-  scepproxy:
-    build: './proxy'
-    ports:
-      - '89:80'
-      - '443:443'
-    volumes:
-      - './ca:/etc/nginx/certs/client'
-  scepserver:
+  scep:
     build: '.'
     environment:
-      CERT_VALID_PERIOD: '${CERT_VALID_PERIOD}'
-      CA_CERT_FILE: '${CA_CERT_FILE}'
-      CA_KEY_FILE: '${CA_KEY_FILE}'
+      SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
+      SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
+      SCEP_ROLE_ID: '${SCEP_ROLE_ID}'
+      SCEP_SECRET_ID: '${SCEP_SECRET_ID}'
+      SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
+      SCEP_DB_NAME: '${SCEP_POSTGRESDB}'
+      SCEP_DB_USER: '${SCEP_POSTGRESUSER}'
+      SCEP_DB_PASSWORD: '${SCEP_POSTGRESPASSWORD}'
+      SCEP_DB_HOST: '${SCEP_DB_HOST}'
+      SCEP_DB_PORT: '${POSTGRES_PORT}'
+    volumes:
+      - ./ca:${SCEP_FILE_DEPOT}
     ports:
-      - '8088:8080'
-    command: -crtvalid $CERT_VALID_PERIOD -cacert $CA_CERT_FILE -cakey $CA_KEY_FILE
+      - ${SCEP_HTTP_LISTEN_PORT}:${SCEP_HTTP_LISTEN_PORT}
+    networks:
+      - enroller-net
+    ports:
+      - ${SCEP_HTTP_LISTEN_PORT}:${SCEP_HTTP_LISTEN_PORT}
   scepdb:
     image: 'postgres:latest'
     environment:
@@ -27,7 +32,13 @@ services:
       - 'scep_pg_data:/var/lib/postgresql/data'
       - './create.sql:/docker-entrypoint-initdb.d/create.sql'
     ports:
-      - '5433:5432'
-      
+      - ${POSTGRES_EXPOSE_PORT}:5432
+    networks:
+      - enroller-net  
+
 volumes:
   scep_pg_data: null
+ 
+networks:
+  enroller-net:
+    external: true

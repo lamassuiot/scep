@@ -1,8 +1,8 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -19,7 +19,7 @@ const (
 
 type csrOptions struct {
 	cn, org, country, ou, locality, province, challenge string
-	key                                                 *rsa.PrivateKey
+	key                                                 *ecdsa.PrivateKey
 	sigAlgo                                             x509.SignatureAlgorithm
 }
 

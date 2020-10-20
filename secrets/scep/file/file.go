@@ -35,21 +35,17 @@ func (d *fileSCEPSecrets) GetCACert() ([]*x509.Certificate, error) {
 	return []*x509.Certificate{cert}, nil
 }
 
-func (d *fileSCEPSecrets) GetCAKey() (*rsa.PrivateKey, error) {
+func (d *fileSCEPSecrets) GetCAKey(password []byte) (*rsa.PrivateKey, error) {
 	keyPEM, err := d.getFile("ca.key")
 	if err != nil {
 		return nil, err
 	}
 
-	key, err := loadKey(keyPEM.Data, nil)
+	key, err := loadKey(keyPEM.Data, password)
 	if err != nil {
 		return nil, err
 	}
 	return key, nil
-}
-
-func (d *fileSCEPSecrets) GetCAKeyPassword() []byte {
-	return []byte("dummy_password")
 }
 
 func (d *fileSCEPSecrets) getFile(path string) (*file, error) {
@@ -82,7 +78,7 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-//load an encrypted private key from disk
+//load a private key from disk
 func loadKey(data []byte, password []byte) (*rsa.PrivateKey, error) {
 	pemBlock, _ := pem.Decode(data)
 	if pemBlock == nil {
@@ -92,11 +88,16 @@ func loadKey(data []byte, password []byte) (*rsa.PrivateKey, error) {
 	if pemBlock.Type != rsaPrivateKeyPEMBlockType {
 		return nil, errors.New("unmatched type or headers")
 	}
-
-	return x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+	var pemBlockBytes []byte
+	if len(password) > 0 && password != nil {
+		pemBlockBytes, _ = x509.DecryptPEMBlock(pemBlock, password)
+	} else {
+		pemBlockBytes = pemBlock.Bytes
+	}
+	return x509.ParsePKCS1PrivateKey(pemBlockBytes)
 }
 
-//load an encrypted private key from disk
+//load a certifiate from disk
 func loadCert(data []byte) (*x509.Certificate, error) {
 	pemBlock, _ := pem.Decode(data)
 	if pemBlock == nil {

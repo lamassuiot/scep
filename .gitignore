@@ -6,4 +6,5 @@ vendor/
 dummy_ca/
 .vscode/
 .env
-
+ca/
+certs/

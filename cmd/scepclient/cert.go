@@ -1,8 +1,8 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -28,7 +28,7 @@ func pemCert(derBytes []byte) []byte {
 	return out
 }
 
-func loadOrSign(path string, priv *rsa.PrivateKey, csr *x509.CertificateRequest) (*x509.Certificate, error) {
+func loadOrSign(path string, priv *ecdsa.PrivateKey, csr *x509.CertificateRequest) (*x509.Certificate, error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		if os.IsExist(err) {
@@ -52,7 +52,7 @@ func loadOrSign(path string, priv *rsa.PrivateKey, csr *x509.CertificateRequest)
 	return self, nil
 }
 
-func selfSign(priv *rsa.PrivateKey, csr *x509.CertificateRequest) (*x509.Certificate, error) {
+func selfSign(priv *ecdsa.PrivateKey, csr *x509.CertificateRequest) (*x509.Certificate, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {

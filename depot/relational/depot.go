@@ -77,9 +77,9 @@ func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
 	VALUES($1, $2, $3, $4, $5, $6)
 	RETURNING serial;
 	`
-	serial := 0
+	var serial string
 
-	err := rlDB.db.QueryRow(sqlStatement, "V", expirationDate, "", crt.SerialNumber.Int64(), dn, name).Scan(&serial)
+	err := rlDB.db.QueryRow(sqlStatement, "V", expirationDate, "", crt.SerialNumber.String(), dn, name).Scan(&serial)
 
 	if err != nil {
 		return err
@@ -99,6 +99,7 @@ func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
 	return nil
 }
 
+// This function is not used with Vault (Take care because serial is string in database)
 func (rlDB *relationalDB) Serial() (*big.Int, error) {
 	var serial int64
 
@@ -137,7 +138,7 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 		status         string
 		expirationDate string
 		revocationDate string
-		serial         *big.Int
+		serial         string
 		dn             string
 		certPath       string
 	}
@@ -150,12 +151,10 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 
 	for rows.Next() {
 		var caItem caItem
-		var serial int64
-		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &serial, &caItem.dn, &caItem.certPath)
+		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &caItem.serial, &caItem.dn, &caItem.certPath)
 		if err != nil {
 			return false, err
 		}
-		caItem.serial = big.NewInt(serial)
 		if caItem.status == "V" {
 			issueDate, err := strconv.ParseInt(strings.Replace(caItem.expirationDate, "Z", "", 1), 10, 64)
 			if err != nil {
@@ -167,7 +166,7 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 				return false, errors.New("DN " + dn + " already exists")
 			}
 			if revokeOldCertificate {
-				fmt.Println("Revoking certificate with serial " + strconv.FormatInt(caItem.serial.Int64(), 10) + " from DB. Recreation of CRL needed.")
+				fmt.Println("Revoking certificate with serial " + caItem.serial + " from DB. Recreation of CRL needed.")
 				err = rlDB.revokeCertificate(caItem.serial, caItem.dn)
 				if err != nil {
 					return false, err
@@ -178,14 +177,14 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 	return true, nil
 }
 
-func (rlDB *relationalDB) revokeCertificate(serial *big.Int, dn string) error {
+func (rlDB *relationalDB) revokeCertificate(serial string, dn string) error {
 	sqlStatement := `
 	UPDATE ca_store
 	SET status = 'R', revocationDate = $1
 	WHERE serial = $2 AND dn = $3;
 	`
 
-	res, err := rlDB.db.Exec(sqlStatement, makeOpenSSLTime(time.Now()), serial.Int64(), dn)
+	res, err := rlDB.db.Exec(sqlStatement, makeOpenSSLTime(time.Now()), serial, dn)
 
 	if err != nil {
 		return err

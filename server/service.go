@@ -95,7 +95,7 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 	if err != nil {
 		return nil, errors.New("unable to get SCEP CA Cert")
 	}
-	scepCAKey, err := svc.scepSecrets.GetCAKey()
+	scepCAKey, err := svc.scepSecrets.GetCAKey(svc.caKeyPassword)
 	if err != nil {
 		return nil, errors.New("unable to get CA Key")
 	}
@@ -133,32 +133,6 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 	}
 
 	csr := msg.CSRReqMessage.CSR
-	/*id, err := generateSubjectKeyID(csr.PublicKey)
-	if err != nil {
-
-		return nil, err
-	}
-
-	serial, err := svc.depot.Serial()
-	if err != nil {
-		return nil, err
-	}
-
-	duration := svc.clientValidity
-
-	// create cert template
-	tmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      csr.Subject,
-		NotBefore:    time.Now().Add(-600).UTC(),
-		NotAfter:     time.Now().AddDate(0, 0, duration).UTC(),
-		SubjectKeyId: id,
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageClientAuth,
-		},
-		SignatureAlgorithm: csr.SignatureAlgorithm,
-	}*/
 
 	//Change this method to sign CSR with Vault CA
 	certRep, err := msg.SignCSR(scepCA[0], scepCAKey, csr, svc.caSecrets)
@@ -233,6 +207,15 @@ func WithCSRVerifier(csrVerifier csrverifier.CSRVerifier) ServiceOption {
 func ChallengePassword(pw string) ServiceOption {
 	return func(s *service) error {
 		s.challengePassword = pw
+		return nil
+	}
+}
+
+// CAKeyPassword is an optional argument to NewService for
+// specifying the CA private key password.
+func CAKeyPassword(pw []byte) ServiceOption {
+	return func(s *service) error {
+		s.caKeyPassword = pw
 		return nil
 	}
 }

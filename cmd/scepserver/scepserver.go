@@ -58,9 +58,15 @@ func main() {
 		flVersion           = flag.Bool("version", false, "prints version information")
 		flPort              = flag.String("port", envString("SCEP_HTTP_LISTEN_PORT", "8080"), "port to listen on")
 		flDepotPath         = flag.String("depot", envString("SCEP_FILE_DEPOT", "depot"), "path to ca folder")
+		flCAPass            = flag.String("capass", envString("SCEP_CA_PASS", ""), "password for the ca.key")
 		flVaultAddress      = flag.String("vaultaddress", envString("SCEP_VAULT_ADDRESS", "vault"), "vault address")
 		flRoleID            = flag.String("roleid", envString("SCEP_ROLE_ID", ""), "vault RoleID")
 		flSecretID          = flag.String("secretid", envString("SCEP_SECRET_ID", ""), "vault SecretID")
+		flDBName            = flag.String("dbname", envString("SCEP_DB_NAME", "ca_store"), "DB name")
+		flDBUser            = flag.String("dbuser", envString("SCEP_DB_USER", "scep"), "DB user")
+		flDBPassword        = flag.String("dbpass", envString("SCEP_DB_PASSWORD", ""), "DB password")
+		flDBHost            = flag.String("dbhost", envString("SCEP_DB_HOST", ""), "DB host")
+		flDBPort            = flag.String("dbport", envString("SCEP_DB_PORT", ""), "DB port")
 		flClDuration        = flag.String("crtvalid", envString("SCEP_CERT_VALID", "365"), "validity for new client certificates in days")
 		flClAllowRenewal    = flag.String("allowrenew", envString("SCEP_CERT_RENEW", "14"), "do not allow renewal until n days before expiry, set to 0 to always allow")
 		flChallengePassword = flag.String("challenge", envString("SCEP_CHALLENGE_PASSWORD", ""), "enforce a challenge password")
@@ -123,7 +129,7 @@ func main() {
 	var depot depot.Depot // cert storage
 	{
 		//depot, err = file.NewFileDepot(*flDepotPath)
-		connStr := "dbname=ca_store user=scep password=scep host=localhost port=5433 sslmode=disable"
+		connStr := "dbname=" + *flDBName + " user=" + *flDBUser + " password=" + *flDBPassword + " host=" + *flDBHost + " port=" + *flDBPort + " sslmode=disable"
 		depot, err = relational.NewRelationalDepot("postgres", connStr)
 		if err != nil {
 			lginfo.Log("err", err)
@@ -155,6 +161,7 @@ func main() {
 		svcOptions := []scepserver.ServiceOption{
 			scepserver.ChallengePassword(*flChallengePassword),
 			scepserver.WithCSRVerifier(csrVerifier),
+			scepserver.CAKeyPassword([]byte(*flCAPass)),
 			scepserver.ClientValidity(clientValidity),
 			scepserver.AllowRenewal(allowRenewal),
 			scepserver.WithLogger(logger),

@@ -5,8 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"fmt"
-	"net/http"
+	"strings"
 
 	"github.com/hashicorp/vault/api"
 )
@@ -23,7 +22,11 @@ const (
 )
 
 func NewVaultSecrets(address string, roleID string, secretID string) (*vaultSecrets, error) {
-	client, err := api.NewClient(&api.Config{Address: address, HttpClient: &http.Client{}})
+	conf := api.DefaultConfig()
+	conf.Address = strings.ReplaceAll(conf.Address, "https://127.0.0.1:8200", address)
+	tlsConf := &api.TLSConfig{Insecure: true}
+	conf.ConfigureTLS(tlsConf)
+	client, err := api.NewClient(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +64,6 @@ func (vs *vaultSecrets) SignCertificate(csr *x509.CertificateRequest) ([]byte, e
 		return nil, err
 	}
 	certData := data.Data["certificate"]
-	fmt.Println(certData.(string))
 	certPEMBlock, _ := pem.Decode([]byte(certData.(string)))
 	if certPEMBlock == nil || certPEMBlock.Type != "CERTIFICATE" {
 		return nil, errors.New("failed to decode PEM block containing certificate")

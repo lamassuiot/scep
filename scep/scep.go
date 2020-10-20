@@ -6,6 +6,8 @@ package scep
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -173,7 +175,7 @@ type PKIMessage struct {
 	Recipients []*x509.Certificate
 
 	// Signer info
-	SignerKey  *rsa.PrivateKey
+	SignerKey  *ecdsa.PrivateKey
 	SignerCert *x509.Certificate
 
 	SCEPEncryptionAlgorithm int
@@ -663,6 +665,8 @@ func generateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	case *ecdsa.PublicKey:
+		pubBytes = elliptic.Marshal(pub.Curve, pub.X, pub.Y)
 	default:
 		return nil, errors.New("only RSA public key is supported")
 	}

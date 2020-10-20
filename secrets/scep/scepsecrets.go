@@ -7,6 +7,5 @@ import (
 
 type SCEPSecrets interface {
 	GetCACert() ([]*x509.Certificate, error)
-	GetCAKey() (*rsa.PrivateKey, error)
-	GetCAKeyPassword() []byte
+	GetCAKey(password []byte) (*rsa.PrivateKey, error)
 }
