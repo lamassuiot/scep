@@ -134,34 +134,8 @@ func (svc *service) PKIOperation(ctx context.Context, data []byte) ([]byte, erro
 
 	csr := msg.CSRReqMessage.CSR
 
-<<<<<<< HEAD
 	//Change this method to sign CSR with Vault CA
 	certRep, err := msg.SignCSR(scepCA[0], scepCAKey, csr, svc.caSecrets)
-=======
-	serial, err := svc.depot.Serial()
-	if err != nil {
-		return nil, err
-	}
-
-	duration := svc.clientValidity
-
-	// create cert template
-	tmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      csr.Subject,
-		NotBefore:    time.Now().Add(-600).UTC(),
-		NotAfter:     time.Now().AddDate(0, 0, duration).UTC(),
-		SubjectKeyId: id,
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageClientAuth,
-		},
-		SignatureAlgorithm: csr.SignatureAlgorithm,
-		EmailAddresses:     csr.EmailAddresses,
-	}
-
-	certRep, err := msg.SignCSR(ca, svc.caKey, tmpl)
->>>>>>> c7e7a9d4ce3f9e6d9ce057380e543766e4524f63
 	if err != nil {
 		return nil, err
 	}
