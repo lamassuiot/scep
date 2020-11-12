@@ -3,18 +3,23 @@ package scepserver_test
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	kitlog "github.com/go-kit/kit/log"
 
@@ -22,6 +27,47 @@ import (
 	filedepot "github.com/micromdm/scep/depot/file"
 	scepserver "github.com/micromdm/scep/server"
 )
+
+type testSCEPSecrets struct {
+	scepCert *x509.Certificate
+	scepKey  *rsa.PrivateKey
+}
+
+func (tSCEPs *testSCEPSecrets) GetCACert() ([]*x509.Certificate, error) {
+	return []*x509.Certificate{tSCEPs.scepCert}, nil
+}
+
+func (tSCEPs *testSCEPSecrets) GetCAKey(password []byte) (*rsa.PrivateKey, error) {
+	return tSCEPs.scepKey, nil
+}
+
+type testCASecrets struct {
+	caCert *x509.Certificate
+	caKey  *rsa.PrivateKey
+}
+
+func (tCAs *testCASecrets) SignCertificate(csr *x509.CertificateRequest) ([]byte, error) {
+	id, err := GenerateSubjectKeyID(csr.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(4),
+		Subject:      csr.Subject,
+		NotBefore:    time.Now().Add(-600).UTC(),
+		NotAfter:     time.Now().AddDate(1, 0, 0).UTC(),
+		SubjectKeyId: id,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageAny,
+			x509.ExtKeyUsageClientAuth,
+		},
+	}
+	crtBytes, err := x509.CreateCertificate(rand.Reader, tmpl, tCAs.caCert, csr.PublicKey, tCAs.caKey)
+	if err != nil {
+		return nil, err
+	}
+	return crtBytes, nil
+}
 
 func TestCACaps(t *testing.T) {
 	server, _, teardown := newServer(t)
@@ -93,7 +139,7 @@ func TestPKIOperationGET(t *testing.T) {
 	defer teardown()
 	pkcsreq := loadTestFile(t, "../scep/testdata/PKCSReq.der")
 	message := base64.StdEncoding.EncodeToString(pkcsreq)
-	req, err := http.NewRequest("GET", server.URL + "/scep", nil)
+	req, err := http.NewRequest("GET", server.URL+"/scep", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,9 +166,12 @@ func newServer(t *testing.T, opts ...scepserver.ServiceOption) (*httptest.Server
 		}
 		depot = &noopDepot{depot}
 	}
+	caCert, caKey := loadCACredentials(t)
+	tCAs := testCASecrets{caCert: caCert, caKey: caKey}
+	tSCEPs := testSCEPSecrets{scepCert: caCert, scepKey: caKey}
 	var svc scepserver.Service // scep service
 	{
-		svc, err = scepserver.NewService(depot, opts...)
+		svc, err = scepserver.NewService(depot, &tCAs, &tSCEPs, opts...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -249,4 +298,31 @@ func loadKeyFromFile(path string) (*rsa.PrivateKey, error) {
 	}
 
 	return x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+}
+
+// rsaPublicKey reflects the ASN.1 structure of a PKCS#1 public key.
+type rsaPublicKey struct {
+	N *big.Int
+	E int
+}
+
+func GenerateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
+	var pubBytes []byte
+	var err error
+	switch pub := pub.(type) {
+	case *rsa.PublicKey:
+		pubBytes, err = asn1.Marshal(rsaPublicKey{
+			N: pub.N,
+			E: pub.E,
+		})
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.New("only RSA public key is supported")
+	}
+
+	hash := sha1.Sum(pubBytes)
+
+	return hash[:], nil
 }

@@ -1,12 +1,23 @@
 version: '3'
 services:
-  scep:
+  scepproxy:
+    build: 
+      context: proxy
+    volumes:
+      - ./proxy/server/certs:${NGINX_SERVER_CERTS}
+      - ./proxy/client/certs:${NGINX_CLIENT_CERTS}
+    networks:
+      - enroller-net
+    ports:
+      - '9898:443'
+  scepca4:
     build: '.'
     environment:
       SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
       SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
-      SCEP_ROLE_ID: '${SCEP_ROLE_ID}'
-      SCEP_SECRET_ID: '${SCEP_SECRET_ID}'
+      SCEP_VAULT_CA: '${SCEP_VAULT_CA4}'
+      SCEP_ROLE_ID: '${SCEP_CA4_ROLE_ID}'
+      SCEP_SECRET_ID: '${SCEP_CA4_SECRET_ID}'
       SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
       SCEP_DB_NAME: '${SCEP_POSTGRESDB}'
       SCEP_DB_USER: '${SCEP_POSTGRESUSER}'
@@ -15,12 +26,78 @@ services:
       SCEP_DB_PORT: '${POSTGRES_PORT}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
-    ports:
-      - ${SCEP_HTTP_LISTEN_PORT}:${SCEP_HTTP_LISTEN_PORT}
     networks:
       - enroller-net
     ports:
-      - ${SCEP_HTTP_LISTEN_PORT}:${SCEP_HTTP_LISTEN_PORT}
+      - ${SCEP_CA4_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
+    expose:
+      - ${SCEP_HTTP_LISTEN_PORT}
+  scepca3:
+    build: '.'
+    environment:
+      SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
+      SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
+      SCEP_VAULT_CA: '${SCEP_VAULT_CA3}'
+      SCEP_ROLE_ID: '${SCEP_CA3_ROLE_ID}'
+      SCEP_SECRET_ID: '${SCEP_CA3_SECRET_ID}'
+      SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
+      SCEP_DB_NAME: '${SCEP_POSTGRESDB}'
+      SCEP_DB_USER: '${SCEP_POSTGRESUSER}'
+      SCEP_DB_PASSWORD: '${SCEP_POSTGRESPASSWORD}'
+      SCEP_DB_HOST: '${SCEP_DB_HOST}'
+      SCEP_DB_PORT: '${POSTGRES_PORT}'
+    volumes:
+      - ./ca:${SCEP_FILE_DEPOT}
+    networks:
+      - enroller-net
+    ports:
+      - ${SCEP_CA3_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
+    expose:
+      - ${SCEP_HTTP_LISTEN_PORT}
+  scepca2:
+    build: '.'
+    environment:
+      SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
+      SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
+      SCEP_VAULT_CA: '${SCEP_VAULT_CA2}'
+      SCEP_ROLE_ID: '${SCEP_CA2_ROLE_ID}'
+      SCEP_SECRET_ID: '${SCEP_CA2_SECRET_ID}'
+      SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
+      SCEP_DB_NAME: '${SCEP_POSTGRESDB}'
+      SCEP_DB_USER: '${SCEP_POSTGRESUSER}'
+      SCEP_DB_PASSWORD: '${SCEP_POSTGRESPASSWORD}'
+      SCEP_DB_HOST: '${SCEP_DB_HOST}'
+      SCEP_DB_PORT: '${POSTGRES_PORT}'
+    volumes:
+      - ./ca:${SCEP_FILE_DEPOT}
+    networks:
+      - enroller-net
+    ports:
+      - ${SCEP_CA2_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
+    expose:
+      - ${SCEP_HTTP_LISTEN_PORT}
+  scepca1:
+    build: '.'
+    environment:
+      SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
+      SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
+      SCEP_VAULT_CA: '${SCEP_VAULT_CA1}'
+      SCEP_ROLE_ID: '${SCEP_CA1_ROLE_ID}'
+      SCEP_SECRET_ID: '${SCEP_CA1_SECRET_ID}'
+      SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
+      SCEP_DB_NAME: '${SCEP_POSTGRESDB}'
+      SCEP_DB_USER: '${SCEP_POSTGRESUSER}'
+      SCEP_DB_PASSWORD: '${SCEP_POSTGRESPASSWORD}'
+      SCEP_DB_HOST: '${SCEP_DB_HOST}'
+      SCEP_DB_PORT: '${POSTGRES_PORT}'
+    volumes:
+      - ./ca:${SCEP_FILE_DEPOT}
+    networks:
+      - enroller-net
+    ports:
+      - ${SCEP_CA1_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
+    expose:
+      - ${SCEP_HTTP_LISTEN_PORT}
   scepdb:
     image: 'postgres:latest'
     environment:

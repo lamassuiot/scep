@@ -14,6 +14,7 @@ type vaultSecrets struct {
 	client   *api.Client
 	roleID   string
 	secretID string
+	CA       string
 }
 
 const (
@@ -21,7 +22,7 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewVaultSecrets(address string, roleID string, secretID string) (*vaultSecrets, error) {
+func NewVaultSecrets(address string, roleID string, secretID string, CA string) (*vaultSecrets, error) {
 	conf := api.DefaultConfig()
 	conf.Address = strings.ReplaceAll(conf.Address, "https://127.0.0.1:8200", address)
 	tlsConf := &api.TLSConfig{Insecure: true}
@@ -35,7 +36,7 @@ func NewVaultSecrets(address string, roleID string, secretID string) (*vaultSecr
 	if err != nil {
 		return nil, err
 	}
-	return &vaultSecrets{client: client, roleID: roleID, secretID: secretID}, nil
+	return &vaultSecrets{client: client, roleID: roleID, secretID: secretID, CA: CA}, nil
 }
 
 func Login(client *api.Client, roleID string, secretID string) error {
@@ -53,7 +54,7 @@ func Login(client *api.Client, roleID string, secretID string) error {
 }
 
 func (vs *vaultSecrets) SignCertificate(csr *x509.CertificateRequest) ([]byte, error) {
-	signPath := "ca1/sign/ca1"
+	signPath := vs.CA + "/sign/enroller"
 	csrBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr.Raw})
 	options := map[string]interface{}{
 		"csr":         string(csrBytes),

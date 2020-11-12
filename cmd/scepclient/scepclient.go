@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	stdlog "log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -65,7 +66,7 @@ func run(cfg runCfg) error {
 	}
 	lginfo := level.Info(logger)
 
-	client, err := scepclient.New(cfg.serverURL, logger)
+	client, err := scepclient.New(cfg.serverURL, logger, http.DefaultClient)
 	if err != nil {
 		return err
 	}
@@ -75,7 +76,7 @@ func run(cfg runCfg) error {
 		sigAlgo = x509.SHA256WithRSA
 	}
 
-	key, err := loadOrMakeECDSAKey(cfg.keyPath, cfg.keyBits)
+	key, err := loadOrMakeKey(cfg.keyPath, cfg.keyBits)
 	if err != nil {
 		return err
 	}

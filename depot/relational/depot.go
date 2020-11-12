@@ -2,6 +2,7 @@ package relational
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
@@ -69,17 +70,27 @@ func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
 	data := crt.Raw
 	dn := makeDn(crt)
 	expirationDate := makeOpenSSLTime(crt.NotAfter)
-	name := rlDB.path(cn) + "." + crt.SerialNumber.String() + ".pem"
+	serialHex := fmt.Sprintf("%x", crt.SerialNumber)
+	name := rlDB.path(cn) + "." + serialHex + ".pem"
+
+	key := crt.PublicKeyAlgorithm.String()
+	var keySize int
+	switch key {
+	case "RSA":
+		keySize = crt.PublicKey.(*rsa.PublicKey).N.BitLen()
+	case "ECDSA":
+		keySize = crt.PublicKey.(*ecdsa.PublicKey).Params().BitSize
+	}
 
 	sqlStatement := `
 
-	INSERT INTO ca_store(status, expirationDate, revocationDate, serial, dn, certPath)
-	VALUES($1, $2, $3, $4, $5, $6)
+	INSERT INTO ca_store(status, expirationDate, revocationDate, serial, dn, key, keySize, certPath)
+	VALUES($1, $2, $3, $4, $5, $6, $7, $8)
 	RETURNING serial;
 	`
 	var serial string
 
-	err := rlDB.db.QueryRow(sqlStatement, "V", expirationDate, "", crt.SerialNumber.String(), dn, name).Scan(&serial)
+	err := rlDB.db.QueryRow(sqlStatement, "V", expirationDate, "", serialHex, dn, key, keySize, name).Scan(&serial)
 
 	if err != nil {
 		return err
@@ -101,7 +112,7 @@ func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
 
 // This function is not used with Vault (Take care because serial is string in database)
 func (rlDB *relationalDB) Serial() (*big.Int, error) {
-	var serial int64
+	var serial string
 
 	sqlStatement := `
 	SELECT serial
@@ -119,7 +130,7 @@ func (rlDB *relationalDB) Serial() (*big.Int, error) {
 		return big.NewInt(2), nil
 	}
 
-	s := big.NewInt(serial)
+	s, _ := new(big.Int).SetString(serial, 16)
 	s = s.Add(s, big.NewInt(1))
 
 	return s, nil
@@ -141,6 +152,8 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 		serial         string
 		dn             string
 		certPath       string
+		key            string
+		keySize        int
 	}
 
 	rows, err := rlDB.db.Query(sqlStatement, dn)
@@ -151,7 +164,7 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 
 	for rows.Next() {
 		var caItem caItem
-		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &caItem.serial, &caItem.dn, &caItem.certPath)
+		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &caItem.serial, &caItem.dn, &caItem.certPath, &caItem.key, &caItem.keySize)
 		if err != nil {
 			return false, err
 		}

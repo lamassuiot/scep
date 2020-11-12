@@ -175,7 +175,7 @@ type PKIMessage struct {
 	Recipients []*x509.Certificate
 
 	// Signer info
-	SignerKey  *ecdsa.PrivateKey
+	SignerKey  *rsa.PrivateKey
 	SignerCert *x509.Certificate
 
 	SCEPEncryptionAlgorithm int

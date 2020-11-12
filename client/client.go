@@ -19,8 +19,8 @@ type Client interface {
 }
 
 // New creates a SCEP Client.
-func New(serverURL string, logger log.Logger) (Client, error) {
-	endpoints, err := scepserver.MakeClientEndpoints(serverURL)
+func New(serverURL string, logger log.Logger, httpc *http.Client) (Client, error) {
+	endpoints, err := scepserver.MakeClientEndpoints(serverURL, httpc)
 	if err != nil {
 		return nil, err
 	}

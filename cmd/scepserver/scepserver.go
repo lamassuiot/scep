@@ -60,6 +60,7 @@ func main() {
 		flDepotPath         = flag.String("depot", envString("SCEP_FILE_DEPOT", "depot"), "path to ca folder")
 		flCAPass            = flag.String("capass", envString("SCEP_CA_PASS", ""), "password for the ca.key")
 		flVaultAddress      = flag.String("vaultaddress", envString("SCEP_VAULT_ADDRESS", "vault"), "vault address")
+		flVaultCA           = flag.String("vaultca", envString("SCEP_VAULT_CA", "Lamassu-Root-CA1-RSA4096"), "vault CA")
 		flRoleID            = flag.String("roleid", envString("SCEP_ROLE_ID", ""), "vault RoleID")
 		flSecretID          = flag.String("secretid", envString("SCEP_SECRET_ID", ""), "vault SecretID")
 		flDBName            = flag.String("dbname", envString("SCEP_DB_NAME", "ca_store"), "DB name")
@@ -111,7 +112,7 @@ func main() {
 
 	var caSecrets casecrets.CASecrets
 	{
-		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID)
+		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID, *flVaultCA)
 		if err != nil {
 			lginfo.Log("err", err)
 			os.Exit(1)

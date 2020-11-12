@@ -18,6 +18,34 @@ import (
 	"github.com/micromdm/scep/scep"
 )
 
+type testCASecerts struct {
+	caCert *x509.Certificate
+	caKey  *rsa.PrivateKey
+}
+
+func (tCAs *testCASecerts) SignCertificate(csr *x509.CertificateRequest) ([]byte, error) {
+	id, err := GenerateSubjectKeyID(csr.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(4),
+		Subject:      csr.Subject,
+		NotBefore:    time.Now().Add(-600).UTC(),
+		NotAfter:     time.Now().AddDate(1, 0, 0).UTC(),
+		SubjectKeyId: id,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageAny,
+			x509.ExtKeyUsageClientAuth,
+		},
+	}
+	crtBytes, err := x509.CreateCertificate(rand.Reader, tmpl, tCAs.caCert, csr.PublicKey, tCAs.caKey)
+	if err != nil {
+		return nil, err
+	}
+	return crtBytes, nil
+}
+
 func testParsePKIMessage(t *testing.T, data []byte) *scep.PKIMessage {
 	msg, err := scep.ParsePKIMessage(data)
 	if err != nil {
@@ -69,27 +97,13 @@ func TestSignCSR(t *testing.T) {
 	pkcsReq := loadTestFile(t, "testdata/PKCSReq.der")
 	msg := testParsePKIMessage(t, pkcsReq)
 	cacert, cakey := loadCACredentials(t)
+	tCAs := testCASecerts{caCert: cacert, caKey: cakey}
 	err := msg.DecryptPKIEnvelope(cacert, cakey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	csr := msg.CSRReqMessage.CSR
-	id, err := GenerateSubjectKeyID(csr.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(4),
-		Subject:      csr.Subject,
-		NotBefore:    time.Now().Add(-600).UTC(),
-		NotAfter:     time.Now().AddDate(1, 0, 0).UTC(),
-		SubjectKeyId: id,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageAny,
-			x509.ExtKeyUsageClientAuth,
-		},
-	}
-	certRep, err := msg.SignCSR(cacert, cakey, tmpl)
+	certRep, err := msg.SignCSR(cacert, cakey, csr, &tCAs)
 	if err != nil {
 		t.Fatal(err)
 	}
