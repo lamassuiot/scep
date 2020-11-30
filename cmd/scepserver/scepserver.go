@@ -34,6 +34,9 @@ import (
 
 	scepsecrets "github.com/micromdm/scep/secrets/scep"
 	"github.com/micromdm/scep/secrets/scep/file"
+
+	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
 )
 
 // version info
@@ -157,6 +160,8 @@ func main() {
 		csrVerifier = executableCSRVerifier
 	}
 
+	fieldKeys := []string{"method"}
+
 	var svc scepserver.Service // scep service
 	{
 		svcOptions := []scepserver.ServiceOption{
@@ -173,6 +178,20 @@ func main() {
 			os.Exit(1)
 		}
 		svc = scepserver.NewLoggingService(log.With(lginfo, "component", "scep_service"), svc)
+		svc = scepserver.NewInstrumentingMiddleware(
+			kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
+				Namespace: "scep_server",
+				Subsystem: "service",
+				Name:      "request_count",
+				Help:      "Number of requests received.",
+			}, fieldKeys),
+			kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+				Namespace: "scep_server",
+				Subsystem: "service",
+				Name:      "request_latency_microseconds",
+				Help:      "Total duration of requests in microseconds.",
+			}, fieldKeys),
+			svc)
 	}
 
 	var h http.Handler // http handler

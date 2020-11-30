@@ -9,7 +9,7 @@ services:
     networks:
       - enroller-net
     ports:
-      - '9898:443'
+      - ${SCEPPROXY_PORT}:443
   scepca4:
     build: '.'
     environment:
