@@ -24,8 +24,9 @@ const (
 )
 
 type Endpoints struct {
-	GetEndpoint  endpoint.Endpoint
-	PostEndpoint endpoint.Endpoint
+	HealthEndpoint endpoint.Endpoint
+	GetEndpoint    endpoint.Endpoint
+	PostEndpoint   endpoint.Endpoint
 
 	mtx          sync.RWMutex
 	capabilities []byte
@@ -97,9 +98,11 @@ func (e *Endpoints) GetNextCACert(ctx context.Context) ([]byte, error) {
 
 func MakeServerEndpoints(svc Service) *Endpoints {
 	e := MakeSCEPEndpoint(svc)
+	health := MakeHealthEndpoint(svc)
 	return &Endpoints{
-		GetEndpoint:  e,
-		PostEndpoint: e,
+		HealthEndpoint: health,
+		GetEndpoint:    e,
+		PostEndpoint:   e,
 	}
 }
 
@@ -151,6 +154,20 @@ func MakeSCEPEndpoint(svc Service) endpoint.Endpoint {
 		}
 		return resp, nil
 	}
+}
+
+func MakeHealthEndpoint(svc Service) endpoint.Endpoint {
+	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
+		healthy := svc.Health(ctx)
+		return healthResponse{Healthy: healthy}, nil
+	}
+}
+
+type healthRequest struct{}
+
+type healthResponse struct {
+	Healthy bool  `json:"healthy,omitempty"`
+	Err     error `json:"err,omitempty"`
 }
 
 // SCEPRequest is a SCEP server request.

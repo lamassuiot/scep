@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,6 +25,14 @@ func MakeHTTPHandler(e *Endpoints, svc Service, logger kitlog.Logger) http.Handl
 	}
 
 	r := mux.NewRouter()
+
+	r.Methods("GET").Path("/health").Handler(kithttp.NewServer(
+		e.HealthEndpoint,
+		decodeHealthRequest,
+		encodeHealthResponse,
+		opts...,
+	))
+
 	r.Methods("GET").Path("/scep").Handler(kithttp.NewServer(
 		e.GetEndpoint,
 		decodeSCEPRequest,
@@ -72,6 +81,21 @@ func EncodeSCEPRequest(ctx context.Context, r *http.Request, request interface{}
 
 const maxPayloadSize = 2 << 20
 
+func decodeHealthRequest(ctx context.Context, r *http.Request) (request interface{}, err error) {
+	var req healthRequest
+	return req, nil
+}
+
+func encodeHealthResponse(ctx context.Context, w http.ResponseWriter, response interface{}) error {
+	resp := response.(healthResponse)
+	if resp.Err != nil {
+		http.Error(w, resp.Err.Error(), http.StatusInternalServerError)
+		return nil
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	return json.NewEncoder(w).Encode(response)
+}
+
 func decodeSCEPRequest(ctx context.Context, r *http.Request) (interface{}, error) {
 	msg, err := message(r)
 	if err != nil {
@@ -98,7 +122,7 @@ func message(r *http.Request) ([]byte, error) {
 		}
 		op := q.Get("operation")
 		if op == "PKIOperation" {
-			msg2, err := url.PathUnescape(msg);
+			msg2, err := url.PathUnescape(msg)
 			if err != nil {
 				return nil, err
 			}

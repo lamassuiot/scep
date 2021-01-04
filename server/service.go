@@ -21,6 +21,9 @@ import (
 
 // Service is the interface for all supported SCEP server operations.
 type Service interface {
+	// Checks server's health
+	Health(ctx context.Context) bool
+
 	// GetCACaps returns a list of options
 	// which are supported by the server.
 	GetCACaps(ctx context.Context) ([]byte, error)
@@ -66,6 +69,10 @@ func (svc *service) SCEPChallenge() (string, error) {
 	}
 
 	return svc.dynamicChallengeStore.SCEPChallenge()
+}
+
+func (svc *service) Health(ctx context.Context) bool {
+	return true
 }
 
 func (svc *service) GetCACaps(ctx context.Context) ([]byte, error) {
