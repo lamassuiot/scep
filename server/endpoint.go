@@ -96,6 +96,16 @@ func (e *Endpoints) GetNextCACert(ctx context.Context) ([]byte, error) {
 	return resp.Data, resp.Err
 }
 
+func (e *Endpoints) Health(ctx context.Context) bool {
+	var request HealthRequest
+	response, err := e.HealthEndpoint(ctx, request)
+	if err != nil {
+		return false
+	}
+	resp := response.(HealthResponse)
+	return resp.Healthy
+}
+
 func MakeServerEndpoints(svc Service) *Endpoints {
 	e := MakeSCEPEndpoint(svc)
 	health := MakeHealthEndpoint(svc)
@@ -123,6 +133,12 @@ func MakeClientEndpoints(instance string, httpc *http.Client) (*Endpoints, error
 	}
 
 	return &Endpoints{
+		HealthEndpoint: httptransport.NewClient(
+			"GET",
+			tgt,
+			EncodeHealthRequest,
+			DecodeHealthResponse,
+			options...).Endpoint(),
 		GetEndpoint: httptransport.NewClient(
 			"GET",
 			tgt,
@@ -159,13 +175,13 @@ func MakeSCEPEndpoint(svc Service) endpoint.Endpoint {
 func MakeHealthEndpoint(svc Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
 		healthy := svc.Health(ctx)
-		return healthResponse{Healthy: healthy}, nil
+		return HealthResponse{Healthy: healthy}, nil
 	}
 }
 
-type healthRequest struct{}
+type HealthRequest struct{}
 
-type healthResponse struct {
+type HealthResponse struct {
 	Healthy bool  `json:"healthy,omitempty"`
 	Err     error `json:"err,omitempty"`
 }

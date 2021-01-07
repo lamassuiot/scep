@@ -79,15 +79,28 @@ func EncodeSCEPRequest(ctx context.Context, r *http.Request, request interface{}
 	}
 }
 
+func EncodeHealthRequest(ctx context.Context, r *http.Request, request interface{}) error {
+	r.URL.Path = "/health"
+	return nil
+}
+
+func DecodeHealthResponse(ctx context.Context, r *http.Response) (interface{}, error) {
+	var response HealthResponse
+	if err := json.NewDecoder(r.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 const maxPayloadSize = 2 << 20
 
 func decodeHealthRequest(ctx context.Context, r *http.Request) (request interface{}, err error) {
-	var req healthRequest
+	var req HealthRequest
 	return req, nil
 }
 
 func encodeHealthResponse(ctx context.Context, w http.ResponseWriter, response interface{}) error {
-	resp := response.(healthResponse)
+	resp := response.(HealthResponse)
 	if resp.Err != nil {
 		http.Error(w, resp.Err.Error(), http.StatusInternalServerError)
 		return nil
