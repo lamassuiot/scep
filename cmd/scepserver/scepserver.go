@@ -27,6 +27,7 @@ import (
 	executablecsrverifier "github.com/micromdm/scep/csrverifier/executable"
 	"github.com/micromdm/scep/depot"
 	"github.com/micromdm/scep/depot/relational"
+	"github.com/micromdm/scep/discovery/consul"
 	scepserver "github.com/micromdm/scep/server"
 
 	casecrets "github.com/micromdm/scep/secrets/ca"
@@ -59,6 +60,7 @@ func main() {
 	//main flags
 	var (
 		flVersion           = flag.Bool("version", false, "prints version information")
+		flHost              = flag.String("host", envString("SCEP_HOST", "scep"), "host where service is started")
 		flPort              = flag.String("port", envString("SCEP_HTTP_LISTEN_PORT", "8080"), "port to listen on")
 		flDepotPath         = flag.String("depot", envString("SCEP_FILE_DEPOT", "depot"), "path to ca folder")
 		flCAPass            = flag.String("capass", envString("SCEP_CA_PASS", ""), "password for the ca.key")
@@ -71,6 +73,11 @@ func main() {
 		flDBPassword        = flag.String("dbpass", envString("SCEP_DB_PASSWORD", ""), "DB password")
 		flDBHost            = flag.String("dbhost", envString("SCEP_DB_HOST", ""), "DB host")
 		flDBPort            = flag.String("dbport", envString("SCEP_DB_PORT", ""), "DB port")
+		flConsulProtocol    = flag.String("consulprotocol", envString("SCEP_CONSULPROTOCOL", ""), "Consul server protocol")
+		flConsulHost        = flag.String("consulhost", envString("SCEP_CONSULHOST", ""), "Consul host")
+		flConsulPort        = flag.String("consulport", envString("SCEP_CONSULPORT", ""), "Consul port")
+		flProxyHost         = flag.String("proxyhost", envString("SCEP_PROXYHOST", "scepproxy"), "server proxy hostname")
+		flProxyPort         = flag.String("proxyport", envString("SCEP_PROXYPORT", "8088"), "server proxy port")
 		flClDuration        = flag.String("crtvalid", envString("SCEP_CERT_VALID", "365"), "validity for new client certificates in days")
 		flClAllowRenewal    = flag.String("allowrenew", envString("SCEP_CERT_RENEW", "14"), "do not allow renewal until n days before expiry, set to 0 to always allow")
 		flChallengePassword = flag.String("challenge", envString("SCEP_CHALLENGE_PASSWORD", ""), "enforce a challenge password")
@@ -194,6 +201,12 @@ func main() {
 			svc)
 	}
 
+	consulsd, err := consul.NewServiceDiscovery(*flConsulProtocol, *flConsulHost, *flConsulPort, *flProxyHost, *flProxyPort, logger)
+	if err != nil {
+		lginfo.Log("err", err, "msg", "Unable to start Service Discovery")
+		os.Exit(1)
+	}
+
 	var h http.Handler // http handler
 	{
 		e := scepserver.MakeServerEndpoints(svc)
@@ -203,18 +216,22 @@ func main() {
 	}
 
 	// start http server
-	errs := make(chan error, 2)
-	go func() {
-		lginfo.Log("transport", "http", "address", port, "msg", "listening")
-		errs <- http.ListenAndServe(port, h)
-	}()
+	errs := make(chan error)
 	go func() {
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT)
 		errs <- fmt.Errorf("%s", <-c)
 	}()
 
+	go func() {
+		lginfo.Log("transport", "http", "address", port, "msg", "listening")
+		consulsd.Register("http", *flHost, *flPort)
+		errs <- http.ListenAndServe(port, h)
+	}()
+
 	lginfo.Log("terminated", <-errs)
+	consulsd.Deregister()
+
 }
 
 func caMain(cmd *flag.FlagSet) int {

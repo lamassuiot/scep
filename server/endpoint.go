@@ -3,6 +3,7 @@ package scepserver
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/sd"
+	consulsd "github.com/go-kit/kit/sd/consul"
+	"github.com/go-kit/kit/sd/lb"
 	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/pkg/errors"
 )
@@ -152,6 +156,86 @@ func MakeClientEndpoints(instance string, httpc *http.Client) (*Endpoints, error
 			DecodeSCEPResponse,
 			options...).Endpoint(),
 	}, nil
+}
+
+func MakeConsulClientEndpoints(instance string, duration time.Duration, instancer *consulsd.Instancer, httpc *http.Client, logger log.Logger) (*Endpoints, error) {
+	var healthEndpoint, getEndpoint, postEndpoint endpoint.Endpoint
+	ctx := context.Background()
+
+	healthFactory := makeHealthFactory(ctx, "GET", instance, httpc)
+	healthEndpointer := sd.NewEndpointer(instancer, healthFactory, logger)
+	healthBalancer := lb.NewRoundRobin(healthEndpointer)
+	healthEntry := lb.Retry(1, duration, healthBalancer)
+	healthEndpoint = healthEntry
+
+	getFactory := makeSCEPFactory(ctx, "GET", instance, httpc)
+	getEndpointer := sd.NewEndpointer(instancer, getFactory, logger)
+	getBalancer := lb.NewRoundRobin(getEndpointer)
+	getEntry := lb.Retry(1, duration, getBalancer)
+	getEndpoint = getEntry
+
+	postFactory := makeSCEPFactory(ctx, "POST", instance, httpc)
+	postEndpointer := sd.NewEndpointer(instancer, postFactory, logger)
+	postBalancer := lb.NewRoundRobin(postEndpointer)
+	postEntry := lb.Retry(1, duration, postBalancer)
+	postEndpoint = postEntry
+
+	return &Endpoints{
+		HealthEndpoint: healthEndpoint,
+		GetEndpoint:    getEndpoint,
+		PostEndpoint:   postEndpoint,
+	}, nil
+
+}
+
+func makeHealthFactory(_ context.Context, method, path string, httpc *http.Client) sd.Factory {
+	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+		if !strings.HasPrefix(instance, "http") {
+			instance = "http://" + instance
+		}
+
+		tgt, err := url.Parse(instance)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		options := []httptransport.ClientOption{
+			httptransport.SetClient(httpc),
+		}
+
+		return httptransport.NewClient(
+			method,
+			tgt,
+			EncodeHealthRequest,
+			DecodeHealthResponse,
+			options...).Endpoint(), nil, nil
+
+	}
+}
+
+func makeSCEPFactory(_ context.Context, method, path string, httpc *http.Client) sd.Factory {
+	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+		if !strings.HasPrefix(instance, "http") {
+			instance = "http://" + instance
+		}
+
+		tgt, err := url.Parse(instance)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		options := []httptransport.ClientOption{
+			httptransport.SetClient(httpc),
+		}
+
+		return httptransport.NewClient(
+			method,
+			tgt,
+			EncodeSCEPRequest,
+			DecodeSCEPResponse,
+			options...).Endpoint(), nil, nil
+
+	}
 }
 
 func MakeSCEPEndpoint(svc Service) endpoint.Endpoint {
