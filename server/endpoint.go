@@ -190,8 +190,8 @@ func MakeConsulClientEndpoints(instance string, duration time.Duration, instance
 
 func makeHealthFactory(_ context.Context, method, path string, httpc *http.Client) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
-		if !strings.HasPrefix(instance, "http") {
-			instance = "http://" + instance
+		if !strings.HasPrefix(instance, "https") {
+			instance = "https://" + instance
 		}
 
 		tgt, err := url.Parse(instance)
@@ -215,8 +215,8 @@ func makeHealthFactory(_ context.Context, method, path string, httpc *http.Clien
 
 func makeSCEPFactory(_ context.Context, method, path string, httpc *http.Client) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
-		if !strings.HasPrefix(instance, "http") {
-			instance = "http://" + instance
+		if !strings.HasPrefix(instance, "https") {
+			instance = "https://" + instance
 		}
 
 		tgt, err := url.Parse(instance)

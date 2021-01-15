@@ -1,9 +1,12 @@
 package consul
 
 import (
+	"strconv"
+
 	"github.com/micromdm/scep/discovery"
 
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	consulsd "github.com/go-kit/kit/sd/consul"
 	"github.com/hashicorp/consul/api"
 )
@@ -21,6 +24,7 @@ func NewServiceDiscovery(consulProtocol string, consulHost string, consulPort st
 	consulConfig.Address = consulProtocol + "://" + consulHost + ":" + consulPort
 	consulClient, err := api.NewClient(consulConfig)
 	if err != nil {
+		level.Error(logger).Log("err", err, "Could not start Consul API Client")
 		return nil, err
 	}
 	client := consulsd.NewClient(consulClient)
@@ -35,11 +39,12 @@ func (sd *ServiceDiscovery) Register(advProtocol string, advHost string, advPort
 		TLSSkipVerify: true,
 		Notes:         "Basic health checks",
 	}
-
+	port, _ := strconv.Atoi(advPort)
 	asr := api.AgentServiceRegistration{
 		ID:      advHost,
 		Name:    advHost,
-		Address: "https://" + sd.proxyHost + ":" + sd.proxyPort + "/" + advHost + "/",
+		Address: advHost,
+		Port:    port,
 		Tags:    []string{"scep", advHost},
 		Check:   &check,
 	}

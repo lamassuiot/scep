@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -17,12 +16,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
+
 	_ "github.com/lib/pq"
 )
 
 type relationalDB struct {
 	db      *sql.DB
 	dirPath string
+	logger  log.Logger
 }
 
 type file struct {
@@ -35,18 +38,18 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewRelationalDepot(driverName string, dataSourceName string) (*relationalDB, error) {
+func NewRelationalDepot(driverName string, dataSourceName string, logger log.Logger) (*relationalDB, error) {
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
 	}
 	err = checkDBAlive(db)
 	for err != nil {
-		fmt.Println("Trying to connect to DB")
+		level.Warn(logger).Log("msg", "Trying to connect to signed certificates database")
 		err = checkDBAlive(db)
 	}
 
-	return &relationalDB{db: db}, nil
+	return &relationalDB{db: db, logger: logger}, nil
 }
 
 func checkDBAlive(db *sql.DB) error {
@@ -57,15 +60,16 @@ func checkDBAlive(db *sql.DB) error {
 }
 
 func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
-	if crt == nil {
-		return errors.New("crt is nil")
+	if crt == nil || crt.Raw == nil {
+		err := errors.New("Certificate is empty")
+		level.Error(rlDB.logger).Log("err", err)
+		return err
 	}
-	if crt.Raw == nil {
-		return errors.New("data is nil")
-	}
+
 	if _, err := rlDB.HasCN(cn, 0, crt, true); err != nil {
 		return err
 	}
+	level.Info(rlDB.logger).Log("msg", "Certificate with CN "+cn+" does not exist in database. Inserting new one.")
 
 	data := crt.Raw
 	dn := makeDn(crt)
@@ -93,19 +97,24 @@ func (rlDB *relationalDB) Put(cn string, crt *x509.Certificate) error {
 	err := rlDB.db.QueryRow(sqlStatement, "V", expirationDate, "", serialHex, dn, key, keySize, name).Scan(&serial)
 
 	if err != nil {
+		level.Error(rlDB.logger).Log("err", err, "msg", "Could not insert certificate with serial "+serialHex+" and DN "+dn+" in database")
 		return err
 	}
+	level.Info(rlDB.logger).Log("msg", "Certificate with serial "+serial+" and DN "+dn+" inserted in database")
 
 	file, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0444)
 	if err != nil {
+		level.Error(rlDB.logger).Log("err", err, "msg", "Could not insert certificate with serial "+serialHex+" and DN "+dn+" in file system")
 		return err
 	}
 	defer file.Close()
 
 	if _, err := file.Write(pemCert(data)); err != nil {
+		level.Error(rlDB.logger).Log("err", err, "msg", "Could not parse certificate with serial "+serialHex+" and DN "+dn+", removing from file system")
 		os.Remove(name)
 		return err
 	}
+	level.Info(rlDB.logger).Log("msg", "Certificate with serial "+serial+" and DN "+dn+" inserted in file system")
 
 	return nil
 }
@@ -126,7 +135,7 @@ func (rlDB *relationalDB) Serial() (*big.Int, error) {
 
 	//If there are not certificates stored, the serial does not exist, so create new one.
 	if err != nil {
-		fmt.Println(err)
+		level.Info(rlDB.logger).Log("msg", "Database is empty, starting new serial counter")
 		return big.NewInt(2), nil
 	}
 
@@ -158,6 +167,7 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 
 	rows, err := rlDB.db.Query(sqlStatement, dn)
 	if err != nil {
+		level.Error(rlDB.logger).Log("err", err, "msg", "Could not query database to find CN: "+cn+" certificate")
 		return false, err
 	}
 	defer rows.Close()
@@ -166,24 +176,29 @@ func (rlDB *relationalDB) HasCN(cn string, allowTime int, cert *x509.Certificate
 		var caItem caItem
 		err := rows.Scan(&caItem.status, &caItem.expirationDate, &caItem.revocationDate, &caItem.serial, &caItem.dn, &caItem.certPath, &caItem.key, &caItem.keySize)
 		if err != nil {
+			level.Error(rlDB.logger).Log("err", err, "msg", "Could not read certificate database row finding certificate with CN: "+cn)
 			return false, err
 		}
 		if caItem.status == "V" {
 			issueDate, err := strconv.ParseInt(strings.Replace(caItem.expirationDate, "Z", "", 1), 10, 64)
 			if err != nil {
-				return false, errors.New("Could not get expiry date from ca db")
+				level.Error(rlDB.logger).Log("err", err, "msg", "Could not get expiry date from certificate with serial "+caItem.serial)
+				return false, err
 			}
 			minimalRenewDate, err := strconv.ParseInt(strings.Replace(makeOpenSSLTime(time.Now().AddDate(0, 0, allowTime).UTC()), "Z", "", 1), 10, 64)
 
 			if minimalRenewDate < issueDate && allowTime > 0 {
-				return false, errors.New("DN " + dn + " already exists")
+				err = errors.New("Certificate with DN " + dn + " already exists")
+				level.Error(rlDB.logger).Log("err", err)
+				return false, err
 			}
 			if revokeOldCertificate {
-				fmt.Println("Revoking certificate with serial " + caItem.serial + " from DB. Recreation of CRL needed.")
+				level.Info(rlDB.logger).Log("msg", "Revoking certificate with serial "+caItem.serial+" from DB. Recreation of CRL needed")
 				err = rlDB.revokeCertificate(caItem.serial, caItem.dn)
 				if err != nil {
 					return false, err
 				}
+				level.Info(rlDB.logger).Log("msg", "Certificate with serial "+caItem.serial+" succesfully revoked. Recreation of CRL needed")
 			}
 		}
 	}
@@ -200,77 +215,28 @@ func (rlDB *relationalDB) revokeCertificate(serial string, dn string) error {
 	res, err := rlDB.db.Exec(sqlStatement, makeOpenSSLTime(time.Now()), serial, dn)
 
 	if err != nil {
+		level.Error(rlDB.logger).Log("err", err, "msg", "Could not revoke certificate with serial "+serial+" and DN "+dn)
 		return err
 	}
 
 	rowsAffected, err := res.RowsAffected()
 
 	if err != nil {
+		level.Error(rlDB.logger).Log("err", err, "msg", "Could not revoke certificate with serial "+serial+" and DN "+dn)
 		return err
 	}
 
 	if rowsAffected <= 0 {
-		return errors.New("No rows updated")
+		err = errors.New("No rows have been updated in database")
+		level.Error(rlDB.logger).Log("err", err)
+		return err
 	}
 
 	return nil
-}
-
-// load an encrypted private key from disk
-func loadKey(data []byte, password []byte) (*rsa.PrivateKey, error) {
-	pemBlock, _ := pem.Decode(data)
-	if pemBlock == nil {
-		return nil, errors.New("PEM decode failed")
-	}
-	if pemBlock.Type != rsaPrivateKeyPEMBlockType {
-		return nil, errors.New("unmatched type or headers")
-	}
-
-	b, err := x509.DecryptPEMBlock(pemBlock, password)
-	if err != nil {
-		return nil, err
-	}
-	return x509.ParsePKCS1PrivateKey(b)
-}
-
-// load an encrypted private key from disk
-func loadCert(data []byte) (*x509.Certificate, error) {
-	pemBlock, _ := pem.Decode(data)
-	if pemBlock == nil {
-		return nil, errors.New("PEM decode failed")
-	}
-	if pemBlock.Type != certificatePEMBlockType {
-		return nil, errors.New("unmatched type or headers")
-	}
-
-	return x509.ParseCertificate(pemBlock.Bytes)
-}
-
-func (rlDB *relationalDB) getFile(path string) (*file, error) {
-	// Vault KV call
-
-	if err := rlDB.check(path); err != nil {
-		return nil, err
-	}
-	fi, err := os.Stat(rlDB.path(path))
-	if err != nil {
-		return nil, err
-	}
-	b, err := ioutil.ReadFile(rlDB.path(path))
-	return &file{fi, b}, err
 }
 
 func (rlDB *relationalDB) path(name string) string {
 	return filepath.Join(rlDB.dirPath, name)
-}
-
-func (rlDB *relationalDB) check(path string) error {
-	name := rlDB.path(path)
-	_, err := os.Stat(name)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func makeDn(cert *x509.Certificate) string {

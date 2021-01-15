@@ -28,6 +28,7 @@ services:
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
       SCEP_HOST: '${SCEP_CA4_HOST}'
+      SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
     networks:
@@ -54,6 +55,7 @@ services:
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
       SCEP_HOST: '${SCEP_CA3_HOST}'
+      SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
     networks:
@@ -80,6 +82,7 @@ services:
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
       SCEP_HOST: '${SCEP_CA2_HOST}'
+      SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
     networks:
@@ -106,6 +109,7 @@ services:
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
       SCEP_HOST: '${SCEP_CA1_HOST}'
+      SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
     networks:

@@ -8,6 +8,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 )
 
 type file struct {
@@ -17,34 +20,40 @@ type file struct {
 
 type fileSCEPSecrets struct {
 	dirPath string
+	logger  log.Logger
 }
 
-func NewFileSCEPSecrets(path string) (*fileSCEPSecrets, error) {
-	return &fileSCEPSecrets{dirPath: path}, nil
+func NewFileSCEPSecrets(path string, logger log.Logger) (*fileSCEPSecrets, error) {
+	return &fileSCEPSecrets{dirPath: path, logger: logger}, nil
 }
 
 func (d *fileSCEPSecrets) GetCACert() ([]*x509.Certificate, error) {
 	caPEM, err := d.getFile("ca.pem")
 	if err != nil {
+		level.Error(d.logger).Log("err", err, "msg", "Could not obtain SCEP server certificate")
 		return nil, err
 	}
 	cert, err := loadCert(caPEM.Data)
 	if err != nil {
+		level.Error(d.logger).Log("err", err, "msg", "Could not parse SCEP server certificate")
 		return nil, err
 	}
+	level.Info(d.logger).Log("msg", "SCEP certificate loaded and parsed")
 	return []*x509.Certificate{cert}, nil
 }
 
 func (d *fileSCEPSecrets) GetCAKey(password []byte) (*rsa.PrivateKey, error) {
 	keyPEM, err := d.getFile("ca.key")
 	if err != nil {
+		level.Error(d.logger).Log("err", err, "msg", "Could not obtain SCEP key")
 		return nil, err
 	}
-
 	key, err := loadKey(keyPEM.Data, password)
 	if err != nil {
+		level.Error(d.logger).Log("err", err, "msg", "Could not parse SCEP key")
 		return nil, err
 	}
+	level.Info(d.logger).Log("msg", "SCEP key loaded and parsed")
 	return key, nil
 }
 

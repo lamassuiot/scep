@@ -7,6 +7,9 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
+
 	"github.com/hashicorp/vault/api"
 )
 
@@ -15,6 +18,7 @@ type vaultSecrets struct {
 	roleID   string
 	secretID string
 	CA       string
+	logger   log.Logger
 }
 
 const (
@@ -22,21 +26,23 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewVaultSecrets(address string, roleID string, secretID string, CA string) (*vaultSecrets, error) {
+func NewVaultSecrets(address string, roleID string, secretID string, CA string, logger log.Logger) (*vaultSecrets, error) {
 	conf := api.DefaultConfig()
 	conf.Address = strings.ReplaceAll(conf.Address, "https://127.0.0.1:8200", address)
 	tlsConf := &api.TLSConfig{Insecure: true}
 	conf.ConfigureTLS(tlsConf)
 	client, err := api.NewClient(conf)
 	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not create Vault API client")
 		return nil, err
 	}
 
 	err = Login(client, roleID, secretID)
 	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not login into Vault")
 		return nil, err
 	}
-	return &vaultSecrets{client: client, roleID: roleID, secretID: secretID, CA: CA}, nil
+	return &vaultSecrets{client: client, roleID: roleID, secretID: secretID, CA: CA, logger: logger}, nil
 }
 
 func Login(client *api.Client, roleID string, secretID string) error {
@@ -62,13 +68,17 @@ func (vs *vaultSecrets) SignCertificate(csr *x509.CertificateRequest) ([]byte, e
 	}
 	data, err := vs.client.Logical().Write(signPath, options)
 	if err != nil {
+		level.Error(vs.logger).Log("err", err, "msg", "Vault could not sign certificate")
 		return nil, err
 	}
 	certData := data.Data["certificate"]
 	certPEMBlock, _ := pem.Decode([]byte(certData.(string)))
 	if certPEMBlock == nil || certPEMBlock.Type != "CERTIFICATE" {
-		return nil, errors.New("failed to decode PEM block containing certificate")
+		err = errors.New("Failed to decode PEM block containing certificate")
+		level.Error(vs.logger).Log("err", err)
+		return nil, err
 	}
+	level.Info(vs.logger).Log("msg", "Vault returned certificate signed")
 	return certPEMBlock.Bytes, nil
 
 }

@@ -106,9 +106,9 @@ func main() {
 	{
 
 		if *flLogJSON {
-			logger = log.NewJSONLogger(os.Stderr)
+			logger = log.NewJSONLogger(os.Stdout)
 		} else {
-			logger = log.NewLogfmtLogger(os.Stderr)
+			logger = log.NewLogfmtLogger(os.Stdout)
 		}
 		if !*flDebug {
 			logger = level.NewFilter(logger, level.AllowInfo())
@@ -122,46 +122,51 @@ func main() {
 
 	var caSecrets casecrets.CASecrets
 	{
-		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID, *flVaultCA)
+		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID, *flVaultCA, lginfo)
 		if err != nil {
-			lginfo.Log("err", err)
+			level.Error(lginfo).Log("err", err, "msg", "Could not start connection with CA Vault Secret Engine")
 			os.Exit(1)
 		}
 	}
+	level.Info(lginfo).Log("msg", "Connection established with CA secret engine")
 
 	var scepSecrets scepsecrets.SCEPSecrets
 	{
-		scepSecrets, err = file.NewFileSCEPSecrets(*flDepotPath)
+		scepSecrets, err = file.NewFileSCEPSecrets(*flDepotPath, logger)
 		if err != nil {
-			lginfo.Log("err", err)
+			level.Error(lginfo).Log("err", err, "msg", "Could not start SCEP File secret engine")
 			os.Exit(1)
 		}
 	}
+	level.Info(lginfo).Log("msg", "Connection established with SCEP secret engine")
+
 	var depot depot.Depot // cert storage
 	{
 		//depot, err = file.NewFileDepot(*flDepotPath)
 		connStr := "dbname=" + *flDBName + " user=" + *flDBUser + " password=" + *flDBPassword + " host=" + *flDBHost + " port=" + *flDBPort + " sslmode=disable"
-		depot, err = relational.NewRelationalDepot("postgres", connStr)
+		depot, err = relational.NewRelationalDepot("postgres", connStr, logger)
 		if err != nil {
-			lginfo.Log("err", err)
+			level.Error(lginfo).Log("err", err, "msg", "Could not start connection with signed certificates database")
 			os.Exit(1)
 		}
 	}
+	level.Info(lginfo).Log("msg", "Connection established with signed certificates database")
+
 	allowRenewal, err := strconv.Atoi(*flClAllowRenewal)
 	if err != nil {
-		lginfo.Log("err", err, "msg", "No valid number for allowed renewal time")
+		level.Error(lginfo).Log("err", err, "msg", "No valid number for allowed renewal time")
 		os.Exit(1)
 	}
 	clientValidity, err := strconv.Atoi(*flClDuration)
 	if err != nil {
-		lginfo.Log("err", err, "msg", "No valid number for client cert validity")
+		level.Error(lginfo).Log("err", err, "msg", "No valid number for client cert validity")
 		os.Exit(1)
 	}
 	var csrVerifier csrverifier.CSRVerifier
 	if *flCSRVerifierExec > "" {
 		executableCSRVerifier, err := executablecsrverifier.New(*flCSRVerifierExec, lginfo)
 		if err != nil {
-			lginfo.Log("err", err, "msg", "Could not instantiate CSR verifier")
+			level.Error(lginfo).Log("err", err, "msg", "Could not instantiate CSR verifier")
 			os.Exit(1)
 		}
 		csrVerifier = executableCSRVerifier
@@ -181,7 +186,7 @@ func main() {
 		}
 		svc, err = scepserver.NewService(depot, caSecrets, scepSecrets, svcOptions...)
 		if err != nil {
-			lginfo.Log("err", err)
+			level.Error(lginfo).Log("err", err, "msg", "Could not instantiate SCEP service")
 			os.Exit(1)
 		}
 		svc = scepserver.NewLoggingService(log.With(lginfo, "component", "scep_service"), svc)
@@ -203,7 +208,7 @@ func main() {
 
 	consulsd, err := consul.NewServiceDiscovery(*flConsulProtocol, *flConsulHost, *flConsulPort, *flProxyHost, *flProxyPort, logger)
 	if err != nil {
-		lginfo.Log("err", err, "msg", "Unable to start Service Discovery")
+		level.Error(lginfo).Log("err", err, "msg", "Could not start connection with Consul Service Discovery")
 		os.Exit(1)
 	}
 
@@ -224,14 +229,13 @@ func main() {
 	}()
 
 	go func() {
-		lginfo.Log("transport", "http", "address", port, "msg", "listening")
+		level.Info(lginfo).Log("transport", "HTTP", "address", *flHost+":"+*flPort, "msg", "listening")
 		consulsd.Register("http", *flHost, *flPort)
 		errs <- http.ListenAndServe(port, h)
 	}()
 
-	lginfo.Log("terminated", <-errs)
+	level.Info(lginfo).Log("exit", <-errs)
 	consulsd.Deregister()
-
 }
 
 func caMain(cmd *flag.FlagSet) int {
