@@ -10,6 +10,13 @@ services:
       - enroller-net
     ports:
       - ${SCEPPROXY_PORT}:443
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async-connect: "true"
+        tag: "{{.Name}}"
+      
   scepca4:
     build: '.'
     environment:
@@ -37,6 +44,13 @@ services:
       - ${SCEP_CA4_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async-connect: "true"
+        tag: "{{.Name}}"
+      
   scepca3:
     build: '.'
     environment:
@@ -64,6 +78,13 @@ services:
       - ${SCEP_CA3_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async-connect: "true"
+        tag: "{{.Name}}"
+
   scepca2:
     build: '.'
     environment:
@@ -91,6 +112,13 @@ services:
       - ${SCEP_CA2_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async-connect: "true"
+        tag: "{{.Name}}"
+
   scepca1:
     build: '.'
     environment:
@@ -118,6 +146,13 @@ services:
       - ${SCEP_CA1_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async-connect: "true"
+        tag: "{{.Name}}"
+
   scepdb:
     image: 'postgres:latest'
     environment:
@@ -131,7 +166,13 @@ services:
     ports:
       - ${POSTGRES_EXPOSE_PORT}:5432
     networks:
-      - enroller-net  
+      - enroller-net
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async-connect: "true"
+        tag: "{{.Name}}"  
 
 volumes:
   scep_pg_data: null
