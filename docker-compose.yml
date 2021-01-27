@@ -34,10 +34,15 @@ services:
       SCEP_CONSULPROTOCOL: '${SCEP_CONSULPROTOCOL}'
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
+      SCEP_CONSULCA: '${SCEP_CONSULCA}'
       SCEP_HOST: '${SCEP_CA4_HOST}'
       SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
+      JAEGER_SERVICE_NAME: '${SCEP_CA4_JAEGER_SERVICE_NAME}'
+      JAEGER_AGENT_HOST: '${SCEP_JAEGER_AGENT_HOST}'
+      JAEGER_AGENT_PORT: '${SCEP_JAEGER_AGENT_PORT}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
+      - ./certs:/certs
     networks:
       - enroller-net
     ports:
@@ -68,10 +73,15 @@ services:
       SCEP_CONSULPROTOCOL: '${SCEP_CONSULPROTOCOL}'
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
+      SCEP_CONSULCA: '${SCEP_CONSULCA}'
       SCEP_HOST: '${SCEP_CA3_HOST}'
       SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
+      JAEGER_SERVICE_NAME: '${SCEP_CA3_JAEGER_SERVICE_NAME}'
+      JAEGER_AGENT_HOST: '${SCEP_JAEGER_AGENT_HOST}'
+      JAEGER_AGENT_PORT: '${SCEP_JAEGER_AGENT_PORT}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
+      - ./certs:/certs
     networks:
       - enroller-net
     ports:
@@ -102,10 +112,15 @@ services:
       SCEP_CONSULPROTOCOL: '${SCEP_CONSULPROTOCOL}'
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
+      SCEP_CONSULCA: '${SCEP_CONSULCA}'
       SCEP_HOST: '${SCEP_CA2_HOST}'
       SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
+      JAEGER_SERVICE_NAME: '${SCEP_CA2_JAEGER_SERVICE_NAME}'
+      JAEGER_AGENT_HOST: '${SCEP_JAEGER_AGENT_HOST}'
+      JEGER_AGENT_PORT: '${SCEP_JAEGER_AGENT_PORT}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
+      - ./certs:/certs
     networks:
       - enroller-net
     ports:
@@ -136,10 +151,15 @@ services:
       SCEP_CONSULPROTOCOL: '${SCEP_CONSULPROTOCOL}'
       SCEP_CONSULHOST: '${SCEP_CONSULHOST}'
       SCEP_CONSULPORT: '${SCEP_CONSULPORT}'
+      SCEP_CONSULCA: '${SCEP_CONSULCA}'
       SCEP_HOST: '${SCEP_CA1_HOST}'
       SCEP_LOG_JSON: '${SCEP_LOG_JSON}'
+      JAEGER_SERVICE_NAME: '${SCEP_CA1_JAEGER_SERVICE_NAME}'
+      JAEGER_AGENT_HOST: '${SCEP_JAEGER_AGENT_HOST}'
+      JAEGER_AGENT_PORT: '${SCEP_JAEGER_AGENT_PORT}'
     volumes:
       - ./ca:${SCEP_FILE_DEPOT}
+      - ./certs:/certs
     networks:
       - enroller-net
     ports:

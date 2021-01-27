@@ -19,9 +19,11 @@ type ServiceDiscovery struct {
 	registrar *consulsd.Registrar
 }
 
-func NewServiceDiscovery(consulProtocol string, consulHost string, consulPort string, proxyHost string, proxyPort string, logger log.Logger) (discovery.Service, error) {
+func NewServiceDiscovery(consulProtocol string, consulHost string, consulPort string, proxyHost string, proxyPort string, CA string, logger log.Logger) (discovery.Service, error) {
 	consulConfig := api.DefaultConfig()
 	consulConfig.Address = consulProtocol + "://" + consulHost + ":" + consulPort
+	tlsConf := &api.TLSConfig{CAFile: CA}
+	consulConfig.TLSConfig = *tlsConf
 	consulClient, err := api.NewClient(consulConfig)
 	if err != nil {
 		level.Error(logger).Log("err", err, "Could not start Consul API Client")

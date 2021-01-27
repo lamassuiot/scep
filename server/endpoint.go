@@ -15,7 +15,9 @@ import (
 	"github.com/go-kit/kit/sd"
 	consulsd "github.com/go-kit/kit/sd/consul"
 	"github.com/go-kit/kit/sd/lb"
+	"github.com/go-kit/kit/tracing/opentracing"
 	httptransport "github.com/go-kit/kit/transport/http"
+	stdopentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 )
 
@@ -110,13 +112,27 @@ func (e *Endpoints) Health(ctx context.Context) bool {
 	return resp.Healthy
 }
 
-func MakeServerEndpoints(svc Service) *Endpoints {
-	e := MakeSCEPEndpoint(svc)
-	health := MakeHealthEndpoint(svc)
+func MakeServerEndpoints(svc Service, otTracer stdopentracing.Tracer) *Endpoints {
+	var healthEndpoint endpoint.Endpoint
+	{
+		healthEndpoint = MakeHealthEndpoint(svc)
+		healthEndpoint = opentracing.TraceServer(otTracer, "Health")(healthEndpoint)
+	}
+	var getEndpoint endpoint.Endpoint
+	{
+		getEndpoint = MakeSCEPEndpoint(svc)
+		getEndpoint = opentracing.TraceServer(otTracer, "GetSCEPOperation")(getEndpoint)
+	}
+	var postEndpoint endpoint.Endpoint
+	{
+		postEndpoint = MakeSCEPEndpoint(svc)
+		postEndpoint = opentracing.TraceServer(otTracer, "PostSCEPOperation")(postEndpoint)
+	}
+
 	return &Endpoints{
-		HealthEndpoint: health,
-		GetEndpoint:    e,
-		PostEndpoint:   e,
+		HealthEndpoint: healthEndpoint,
+		GetEndpoint:    getEndpoint,
+		PostEndpoint:   postEndpoint,
 	}
 }
 
@@ -158,27 +174,30 @@ func MakeClientEndpoints(instance string, httpc *http.Client) (*Endpoints, error
 	}, nil
 }
 
-func MakeConsulClientEndpoints(instance string, duration time.Duration, instancer *consulsd.Instancer, httpc *http.Client, logger log.Logger) (*Endpoints, error) {
+func MakeConsulClientEndpoints(instance string, duration time.Duration, instancer *consulsd.Instancer, httpc *http.Client, logger log.Logger, otTracer stdopentracing.Tracer) (*Endpoints, error) {
 	var healthEndpoint, getEndpoint, postEndpoint endpoint.Endpoint
 	ctx := context.Background()
 
-	healthFactory := makeHealthFactory(ctx, "GET", instance, httpc)
+	healthFactory := makeHealthFactory(ctx, "GET", instance, httpc, logger, otTracer)
 	healthEndpointer := sd.NewEndpointer(instancer, healthFactory, logger)
 	healthBalancer := lb.NewRoundRobin(healthEndpointer)
 	healthEntry := lb.Retry(1, duration, healthBalancer)
 	healthEndpoint = healthEntry
+	healthEndpoint = opentracing.TraceClient(otTracer, "Health")(healthEndpoint)
 
-	getFactory := makeSCEPFactory(ctx, "GET", instance, httpc)
+	getFactory := makeSCEPFactory(ctx, "GET", instance, httpc, logger, otTracer)
 	getEndpointer := sd.NewEndpointer(instancer, getFactory, logger)
 	getBalancer := lb.NewRoundRobin(getEndpointer)
 	getEntry := lb.Retry(1, duration, getBalancer)
 	getEndpoint = getEntry
+	getEndpoint = opentracing.TraceClient(otTracer, "GetSCEPOperation")(getEndpoint)
 
-	postFactory := makeSCEPFactory(ctx, "POST", instance, httpc)
+	postFactory := makeSCEPFactory(ctx, "POST", instance, httpc, logger, otTracer)
 	postEndpointer := sd.NewEndpointer(instancer, postFactory, logger)
 	postBalancer := lb.NewRoundRobin(postEndpointer)
 	postEntry := lb.Retry(1, duration, postBalancer)
 	postEndpoint = postEntry
+	postEndpoint = opentracing.TraceClient(otTracer, "PostSCEPOperation")(postEndpoint)
 
 	return &Endpoints{
 		HealthEndpoint: healthEndpoint,
@@ -188,10 +207,11 @@ func MakeConsulClientEndpoints(instance string, duration time.Duration, instance
 
 }
 
-func makeHealthFactory(_ context.Context, method, path string, httpc *http.Client) sd.Factory {
+func makeHealthFactory(_ context.Context, method, path string, httpc *http.Client, logger log.Logger, otTracer stdopentracing.Tracer) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+		host := strings.Split(instance, ":")[0]
 		if !strings.HasPrefix(instance, "https") {
-			instance = "https://" + instance
+			instance = "https://scepproxy/" + host + "/"
 		}
 
 		tgt, err := url.Parse(instance)
@@ -208,15 +228,17 @@ func makeHealthFactory(_ context.Context, method, path string, httpc *http.Clien
 			tgt,
 			EncodeHealthRequest,
 			DecodeHealthResponse,
-			options...).Endpoint(), nil, nil
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint(), nil, nil
 
 	}
 }
 
-func makeSCEPFactory(_ context.Context, method, path string, httpc *http.Client) sd.Factory {
+func makeSCEPFactory(_ context.Context, method, path string, httpc *http.Client, logger log.Logger, otTracer stdopentracing.Tracer) sd.Factory {
 	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+		host := strings.Split(instance, ":")[0]
 		if !strings.HasPrefix(instance, "https") {
-			instance = "https://" + instance
+			instance = "https://scepproxy/" + host + "/"
 		}
 
 		tgt, err := url.Parse(instance)
@@ -233,7 +255,8 @@ func makeSCEPFactory(_ context.Context, method, path string, httpc *http.Client)
 			tgt,
 			EncodeSCEPRequest,
 			DecodeSCEPResponse,
-			options...).Endpoint(), nil, nil
+			append(options, httptransport.ClientBefore(opentracing.ContextToHTTP(otTracer, logger)))...,
+		).Endpoint(), nil, nil
 
 	}
 }

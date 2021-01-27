@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scepdb
+  labels:
+    app: scepdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scepdb
+  template:
+    metadata:
+      labels:
+        app: scepdb
+    spec:
+      containers:
+        - name: scepdb
+          image: postgres:latest
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: scep-db-config
+              mountPath: /docker-entrypoint-initdb.d
+            - name: scepdb-data
+              mountPath: /var/lib/postgresql/data
+          env:
+            - name: POSTGRES_DB
+              value: "scep"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: scep-db-secrets
+                  key: dbuser
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: scep-db-secrets
+                  key: dbpassword
+      volumes:
+        - name: scep-db-config
+          configMap:
+            name: scep-db-config
+        - name: scepdb-data
+          hostPath:
+            path: /data/scepdb-data/

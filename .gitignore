@@ -8,3 +8,4 @@ dummy_ca/
 .env
 ca/
 certs/
+setenv.sh

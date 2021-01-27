@@ -12,13 +12,16 @@ import (
 	"net/url"
 
 	kitlog "github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/tracing/opentracing"
 	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/gorilla/mux"
 	"github.com/groob/finalizer/logutil"
 	"github.com/pkg/errors"
+
+	stdopentracing "github.com/opentracing/opentracing-go"
 )
 
-func MakeHTTPHandler(e *Endpoints, svc Service, logger kitlog.Logger) http.Handler {
+func MakeHTTPHandler(e *Endpoints, svc Service, logger kitlog.Logger, otTracer stdopentracing.Tracer) http.Handler {
 	opts := []kithttp.ServerOption{
 		kithttp.ServerErrorLogger(logger),
 		kithttp.ServerFinalizer(logutil.NewHTTPLogger(logger).LoggingFinalizer),
@@ -30,20 +33,20 @@ func MakeHTTPHandler(e *Endpoints, svc Service, logger kitlog.Logger) http.Handl
 		e.HealthEndpoint,
 		decodeHealthRequest,
 		encodeHealthResponse,
-		opts...,
+		append(opts, kithttp.ServerBefore(opentracing.HTTPToContext(otTracer, "Health", logger)))...,
 	))
 
 	r.Methods("GET").Path("/scep").Handler(kithttp.NewServer(
 		e.GetEndpoint,
 		decodeSCEPRequest,
 		encodeSCEPResponse,
-		opts...,
+		append(opts, kithttp.ServerBefore(opentracing.HTTPToContext(otTracer, "GetSCEPOperation", logger)))...,
 	))
 	r.Methods("POST").Path("/scep").Handler(kithttp.NewServer(
 		e.PostEndpoint,
 		decodeSCEPRequest,
 		encodeSCEPResponse,
-		opts...,
+		append(opts, kithttp.ServerBefore(opentracing.HTTPToContext(otTracer, "PostSCEPOperation", logger)))...,
 	))
 
 	return r

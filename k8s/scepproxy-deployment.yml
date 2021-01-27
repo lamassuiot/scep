@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scepproxy
+  labels:
+    app: scepproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scepproxy
+  template:
+    metadata:
+      labels:
+        app: scepproxy
+    spec:
+      containers:
+        - name: scepproxy
+          image: scepproxy:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 443
+          volumeMounts:
+            - name: server-certs
+              mountPath: "/etc/nginx/certs/server"
+              readOnly: true
+            - name: client-certs
+              mountPath: "/etc/nginx/certs/client"
+              readOnly: true
+      volumes:
+        - name: server-certs
+          secret: 
+            secretName: proxy-server-certs
+        - name: client-certs
+          secret:
+            secretName: proxy-client-certs

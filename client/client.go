@@ -9,6 +9,7 @@ import (
 
 	consulsd "github.com/go-kit/kit/sd/consul"
 	scepserver "github.com/micromdm/scep/server"
+	stdopentracing "github.com/opentracing/opentracing-go"
 )
 
 // Client is a SCEP Client
@@ -29,8 +30,8 @@ func New(serverURL string, logger log.Logger, httpc *http.Client) (Client, error
 	return endpoints, nil
 }
 
-func NewSD(serverURL string, duration time.Duration, instancer *consulsd.Instancer, logger log.Logger, httpc *http.Client) (Client, error) {
-	endpoints, err := scepserver.MakeConsulClientEndpoints(serverURL, duration, instancer, httpc, logger)
+func NewSD(serverURL string, duration time.Duration, instancer *consulsd.Instancer, logger log.Logger, httpc *http.Client, otTracer stdopentracing.Tracer) (Client, error) {
+	endpoints, err := scepserver.MakeConsulClientEndpoints(serverURL, duration, instancer, httpc, logger, otTracer)
 	if err != nil {
 		return nil, err
 	}

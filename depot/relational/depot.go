@@ -38,7 +38,7 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewRelationalDepot(driverName string, dataSourceName string, logger log.Logger) (*relationalDB, error) {
+func NewRelationalDepot(driverName string, dataSourceName string, dirPath string, logger log.Logger) (*relationalDB, error) {
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func NewRelationalDepot(driverName string, dataSourceName string, logger log.Log
 		err = checkDBAlive(db)
 	}
 
-	return &relationalDB{db: db, logger: logger}, nil
+	return &relationalDB{db: db, dirPath: dirPath, logger: logger}, nil
 }
 
 func checkDBAlive(db *sql.DB) error {

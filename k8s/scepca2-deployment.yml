@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scepca2
+  labels:
+    app: scepca2
+  annotations:
+    "sidecar.jaegertracing.io/inject": "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scepca2
+  template:
+    metadata:
+      labels:
+        app: scepca2
+    spec:
+      containers:
+        - name: scepca2
+          image: scep:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8088
+          volumeMounts:
+            - name: ca
+              mountPath: "/ca"
+            - name: certs
+              mountPath: "/certs"
+            - name: scep-home
+              mountPath: /var/lib/lksnext/lamassu/scep
+          env:
+            - name: SCEP_HTTP_LISTEN_PORT
+              value: "8088"
+            - name: SCEP_VAULT_ADDRESS
+              value: "https://vault:8200"
+            - name: SCEP_VAULT_CA
+              value: "Lamassu-Root-CA2-RSA2048"
+            - name: SCEP_ROLE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: scepca2-vault-secrets
+                  key: roleid
+            - name: SCEP_SECRET_ID
+              valueFrom:
+                secretKeyRef:
+                  name: scepca2-vault-secrets
+                  key: secretid
+            - name: SCEP_FILE_DEPOT
+              value: "/var/lib/lksnext/lamassu/scep"
+            - name: SCEP_DB_NAME
+              value: "scep"
+            - name: SCEP_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: scep-db-secrets
+                  key: dbuser
+            - name: SCEP_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: scep-db-secrets
+                  key: dbpassword
+            - name: SCEP_HOME_PATH
+              value: "/var/lib/lksnext/lamassu/scep"
+            - name: SCEP_DB_HOST
+              value: scepdb
+            - name: SCEP_DB_PORT
+              value: "5432"
+            - name: SCEP_CONSULPROTOCOL
+              value: "https"
+            - name: SCEP_CONSULHOST
+              value: "consul-server"
+            - name: SCEP_CONSULPORT
+              value: "8501"
+            - name: SCEP_CONSULCA
+              value: "/certs/consul.crt"
+            - name: SCEP_HOST
+              value: "scepca2"
+            - name: SCEP_LOG_JSON
+              value: "true"
+            - name: JAEGER_SERVICE_NAME
+              value: "scepca2"
+            - name: JAEGER_AGENT_HOST
+              value: "localhost"
+            - name: JAEGER_AGENT_PORT
+              value: "6831"
+      volumes:
+        - name: ca
+          secret:
+            secretName: scep-ca
+        - name: certs
+          secret:
+            secretName: scep-certs
+        - name: scep-home
+          hostPath:
+            path: /data/scep-home/

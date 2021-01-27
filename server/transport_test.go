@@ -22,10 +22,13 @@ import (
 	"time"
 
 	kitlog "github.com/go-kit/kit/log"
+	"github.com/uber/jaeger-client-go"
 
 	"github.com/micromdm/scep/depot"
 	filedepot "github.com/micromdm/scep/depot/file"
 	scepserver "github.com/micromdm/scep/server"
+
+	jaegercfg "github.com/uber/jaeger-client-go/config"
 )
 
 type testSCEPSecrets struct {
@@ -176,9 +179,24 @@ func newServer(t *testing.T, opts ...scepserver.ServiceOption) (*httptest.Server
 			t.Fatal(err)
 		}
 	}
+	cfg := jaegercfg.Configuration{
+		Sampler: &jaegercfg.SamplerConfig{
+			Type:  jaeger.SamplerTypeConst,
+			Param: 1,
+		},
+		Reporter: &jaegercfg.ReporterConfig{
+			LogSpans: true,
+		},
+	}
+	tracer, closer, err := cfg.NewTracer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closer.Close()
+
 	logger := kitlog.NewNopLogger()
-	e := scepserver.MakeServerEndpoints(svc)
-	handler := scepserver.MakeHTTPHandler(e, svc, logger)
+	e := scepserver.MakeServerEndpoints(svc, tracer)
+	handler := scepserver.MakeHTTPHandler(e, svc, logger, tracer)
 	server := httptest.NewServer(handler)
 	teardown := func() {
 		server.Close()

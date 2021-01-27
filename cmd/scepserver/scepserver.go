@@ -38,6 +38,8 @@ import (
 
 	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
+
+	jaegercfg "github.com/uber/jaeger-client-go/config"
 )
 
 // version info
@@ -68,6 +70,7 @@ func main() {
 		flVaultCA           = flag.String("vaultca", envString("SCEP_VAULT_CA", "Lamassu-Root-CA1-RSA4096"), "vault CA")
 		flRoleID            = flag.String("roleid", envString("SCEP_ROLE_ID", ""), "vault RoleID")
 		flSecretID          = flag.String("secretid", envString("SCEP_SECRET_ID", ""), "vault SecretID")
+		flHomePath          = flag.String("homepath", envString("SCEP_HOME_PATH", ""), "home path")
 		flDBName            = flag.String("dbname", envString("SCEP_DB_NAME", "ca_store"), "DB name")
 		flDBUser            = flag.String("dbuser", envString("SCEP_DB_USER", "scep"), "DB user")
 		flDBPassword        = flag.String("dbpass", envString("SCEP_DB_PASSWORD", ""), "DB password")
@@ -76,6 +79,7 @@ func main() {
 		flConsulProtocol    = flag.String("consulprotocol", envString("SCEP_CONSULPROTOCOL", ""), "Consul server protocol")
 		flConsulHost        = flag.String("consulhost", envString("SCEP_CONSULHOST", ""), "Consul host")
 		flConsulPort        = flag.String("consulport", envString("SCEP_CONSULPORT", ""), "Consul port")
+		flConsulCA          = flag.String("consulca", envString("SCEP_CONSULCA", ""), "Consul CA path")
 		flProxyHost         = flag.String("proxyhost", envString("SCEP_PROXYHOST", "scepproxy"), "server proxy hostname")
 		flProxyPort         = flag.String("proxyport", envString("SCEP_PROXYPORT", "8088"), "server proxy port")
 		flClDuration        = flag.String("crtvalid", envString("SCEP_CERT_VALID", "365"), "validity for new client certificates in days")
@@ -144,7 +148,7 @@ func main() {
 	{
 		//depot, err = file.NewFileDepot(*flDepotPath)
 		connStr := "dbname=" + *flDBName + " user=" + *flDBUser + " password=" + *flDBPassword + " host=" + *flDBHost + " port=" + *flDBPort + " sslmode=disable"
-		depot, err = relational.NewRelationalDepot("postgres", connStr, logger)
+		depot, err = relational.NewRelationalDepot("postgres", connStr, *flHomePath, logger)
 		if err != nil {
 			level.Error(lginfo).Log("err", err, "msg", "Could not start connection with signed certificates database")
 			os.Exit(1)
@@ -171,6 +175,20 @@ func main() {
 		}
 		csrVerifier = executableCSRVerifier
 	}
+
+	jcfg, err := jaegercfg.FromEnv()
+	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not load Jaeger configuration values fron environment")
+		os.Exit(1)
+	}
+	level.Info(logger).Log("msg", "Jaeger configuration values loaded")
+	tracer, closer, err := jcfg.NewTracer()
+	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not start Jaeger tracer")
+		os.Exit(1)
+	}
+	defer closer.Close()
+	level.Info(logger).Log("msg", "Jaeger tracer started")
 
 	fieldKeys := []string{"method"}
 
@@ -206,18 +224,24 @@ func main() {
 			svc)
 	}
 
-	consulsd, err := consul.NewServiceDiscovery(*flConsulProtocol, *flConsulHost, *flConsulPort, *flProxyHost, *flProxyPort, logger)
+	consulsd, err := consul.NewServiceDiscovery(*flConsulProtocol, *flConsulHost, *flConsulPort, *flProxyHost, *flProxyPort, *flConsulCA, logger)
 	if err != nil {
 		level.Error(lginfo).Log("err", err, "msg", "Could not start connection with Consul Service Discovery")
 		os.Exit(1)
 	}
-
+	level.Info(logger).Log("msg", "Connection established with Consul Service Discovery")
+	err = consulsd.Register("http", *flHost, *flPort)
+	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not register service liveness information to Consul")
+		os.Exit(1)
+	}
+	level.Info(logger).Log("msg", "Service liveness information registered to Consul")
 	var h http.Handler // http handler
 	{
-		e := scepserver.MakeServerEndpoints(svc)
+		e := scepserver.MakeServerEndpoints(svc, tracer)
 		e.GetEndpoint = scepserver.EndpointLoggingMiddleware(lginfo)(e.GetEndpoint)
 		e.PostEndpoint = scepserver.EndpointLoggingMiddleware(lginfo)(e.PostEndpoint)
-		h = scepserver.MakeHTTPHandler(e, svc, log.With(lginfo, "component", "http"))
+		h = scepserver.MakeHTTPHandler(e, svc, log.With(lginfo, "component", "http"), tracer)
 	}
 
 	// start http server
@@ -230,12 +254,16 @@ func main() {
 
 	go func() {
 		level.Info(lginfo).Log("transport", "HTTP", "address", *flHost+":"+*flPort, "msg", "listening")
-		consulsd.Register("http", *flHost, *flPort)
 		errs <- http.ListenAndServe(port, h)
 	}()
 
 	level.Info(lginfo).Log("exit", <-errs)
-	consulsd.Deregister()
+	err = consulsd.Deregister()
+	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not deregister service liveness information from Consul")
+		os.Exit(1)
+	}
+	level.Info(logger).Log("msg", "Service liveness information deregistered from Consul")
 }
 
 func caMain(cmd *flag.FlagSet) int {
