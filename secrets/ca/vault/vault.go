@@ -26,10 +26,10 @@ const (
 	certificatePEMBlockType   = "CERTIFICATE"
 )
 
-func NewVaultSecrets(address string, roleID string, secretID string, CA string, logger log.Logger) (*vaultSecrets, error) {
+func NewVaultSecrets(address string, roleID string, secretID string, CA string, CACert string, logger log.Logger) (*vaultSecrets, error) {
 	conf := api.DefaultConfig()
 	conf.Address = strings.ReplaceAll(conf.Address, "https://127.0.0.1:8200", address)
-	tlsConf := &api.TLSConfig{Insecure: true}
+	tlsConf := &api.TLSConfig{CACert: CACert}
 	conf.ConfigureTLS(tlsConf)
 	client, err := api.NewClient(conf)
 	if err != nil {

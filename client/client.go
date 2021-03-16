@@ -30,8 +30,8 @@ func New(serverURL string, logger log.Logger, httpc *http.Client) (Client, error
 	return endpoints, nil
 }
 
-func NewSD(serverURL string, duration time.Duration, instancer *consulsd.Instancer, logger log.Logger, httpc *http.Client, otTracer stdopentracing.Tracer) (Client, error) {
-	endpoints, err := scepserver.MakeConsulClientEndpoints(serverURL, duration, instancer, httpc, logger, otTracer)
+func NewSD(serverURL string, duration time.Duration, instancer *consulsd.Instancer, logger log.Logger, otTracer stdopentracing.Tracer) (Client, error) {
+	endpoints, err := scepserver.MakeConsulClientEndpoints(serverURL, duration, instancer, logger, otTracer)
 	if err != nil {
 		return nil, err
 	}

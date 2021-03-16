@@ -36,6 +36,8 @@ spec:
               value: "https://vault:8200"
             - name: SCEP_VAULT_CA
               value: "Lamassu-Root-CA3-ECC384"
+            - name: SCEP_VAULT_CA_CERT
+              value: "/certs/vault.crt"
             - name: SCEP_ROLE_ID
               valueFrom:
                 secretKeyRef:
@@ -46,8 +48,6 @@ spec:
                 secretKeyRef:
                   name: scepca3-vault-secrets
                   key: secretid
-            - name: SCEP_FILE_DEPOT
-              value: "/var/lib/lksnext/lamassu/scep"
             - name: SCEP_DB_NAME
               value: "scep"
             - name: SCEP_DB_USER
@@ -61,6 +61,8 @@ spec:
                   name: scep-db-secrets
                   key: dbpassword
             - name: SCEP_FILE_DEPOT
+              value: "/ca"
+            - name: SCEP_HOME_PATH
               value: "/var/lib/lksnext/lamassu/scep"
             - name: SCEP_DB_HOST
               value: scepdb

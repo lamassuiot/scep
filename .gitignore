@@ -5,7 +5,8 @@ build/
 vendor/
 dummy_ca/
 .vscode/
-.env
+.env*
 ca/
 certs/
 setenv.sh
+proxy/log

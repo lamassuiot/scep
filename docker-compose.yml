@@ -1,28 +1,51 @@
 version: '3'
 services:
+  scepextension:
+    build:
+      context: .
+      dockerfile: Dockerfile.extension
+    environment:
+      SCEPEXTENSION_PORT: '${SCEPEXTENSION_PORT}'
+      SCEPEXTENSION_CONSULPROTOCOL: '${SCEPEXTENSION_CONSULPROTOCOL}'
+      SCEPEXTENSION_CONSULHOST: '${SCEPEXTENSION_CONSULHOST}'
+      SCEPEXTENSION_CONSULPORT: '${SCEPEXTENSION_CONSULPORT}'
+      SCEPEXTENSION_CONSULCA: '${SCEPEXTENSION_CONSULCA}'
+      SCEPEXTENSION_CERTFILE: '${SCEPEXTENSION_CERTFILE}'
+      SCEPEXTENSION_KEYFILE: '${SCEPEXTENSION_KEYFILE}'
+      SCEPEXTENSION_SERVERPORT: '${SCEPEXTENSION_SERVERPORT}'
+      SCEPEXTENSION_SCEPMAPPING: '${SCEPEXTENSION_SCEPMAPPING}'
+      SCEPEXTENSION_PROXYHOST: '${SCEPEXTENSION_PROXYHOST}'
+      SCEPEXTENSION_PROXYPORT: '${SCEPEXTENSION_PROXYPORT}'
+      JAEGER_SERVICE_NAME: '${SCEPEXTENSION_JAEGER_SERVICE_NAME}'
+      JAEGER_AGENT_HOST: '${SCEPEXTENSION_JAEGER_AGENT_HOST}'
+      JAEGER_AGENT_PORT: '${SCEPEXTENSION_JAEGER_AGENT_PORT}'
+    volumes:
+      - ./certs:/certs
+    ports:
+      - ${SCEPEXTENSION_PORT}:${SCEPEXTENSION_PORT}
+    networks:
+      - enroller-net
+
   scepproxy:
     build: 
       context: proxy
+      dockerfile: Dockerfile
     volumes:
+      - ./proxy/log:/var/log/nginx
       - ./proxy/server/certs:${NGINX_SERVER_CERTS}
       - ./proxy/client/certs:${NGINX_CLIENT_CERTS}
+    ports:
+      - 443:443
     networks:
       - enroller-net
-    ports:
-      - ${SCEPPROXY_PORT}:443
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async-connect: "true"
-        tag: "{{.Name}}"
-      
+
   scepca4:
     build: '.'
     environment:
       SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
       SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
       SCEP_VAULT_CA: '${SCEP_VAULT_CA4}'
+      SCEP_VAULT_CA_CERT: '${SCEP_VAULT_CA_CERT}'
       SCEP_ROLE_ID: '${SCEP_CA4_ROLE_ID}'
       SCEP_SECRET_ID: '${SCEP_CA4_SECRET_ID}'
       SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
@@ -49,12 +72,6 @@ services:
       - ${SCEP_CA4_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async-connect: "true"
-        tag: "{{.Name}}"
       
   scepca3:
     build: '.'
@@ -62,6 +79,7 @@ services:
       SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
       SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
       SCEP_VAULT_CA: '${SCEP_VAULT_CA3}'
+      SCEP_VAULT_CA_CERT: '${SCEP_VAULT_CA_CERT}'
       SCEP_ROLE_ID: '${SCEP_CA3_ROLE_ID}'
       SCEP_SECRET_ID: '${SCEP_CA3_SECRET_ID}'
       SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
@@ -88,12 +106,6 @@ services:
       - ${SCEP_CA3_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async-connect: "true"
-        tag: "{{.Name}}"
 
   scepca2:
     build: '.'
@@ -101,6 +113,7 @@ services:
       SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
       SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
       SCEP_VAULT_CA: '${SCEP_VAULT_CA2}'
+      SCEP_VAULT_CA_CERT: '${SCEP_VAULT_CA_CERT}'
       SCEP_ROLE_ID: '${SCEP_CA2_ROLE_ID}'
       SCEP_SECRET_ID: '${SCEP_CA2_SECRET_ID}'
       SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
@@ -127,12 +140,6 @@ services:
       - ${SCEP_CA2_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async-connect: "true"
-        tag: "{{.Name}}"
 
   scepca1:
     build: '.'
@@ -140,6 +147,7 @@ services:
       SCEP_HTTP_LISTEN_PORT: '${SCEP_HTTP_LISTEN_PORT}'
       SCEP_VAULT_ADDRESS: '${SCEP_VAULT_ADDRESS}'
       SCEP_VAULT_CA: '${SCEP_VAULT_CA1}'
+      SCEP_VAULT_CA_CERT: '${SCEP_VAULT_CA_CERT}'
       SCEP_ROLE_ID: '${SCEP_CA1_ROLE_ID}'
       SCEP_SECRET_ID: '${SCEP_CA1_SECRET_ID}'
       SCEP_FILE_DEPOT: '${SCEP_FILE_DEPOT}'
@@ -166,12 +174,6 @@ services:
       - ${SCEP_CA1_EXPOSE_PORT}:${SCEP_HTTP_LISTEN_PORT}
     expose:
       - ${SCEP_HTTP_LISTEN_PORT}
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async-connect: "true"
-        tag: "{{.Name}}"
 
   scepdb:
     image: 'postgres:latest'

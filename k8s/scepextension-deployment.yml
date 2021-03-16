@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scepextension
+  labels:
+    app: scepextension
+  annotations:
+    "sidecar.jaegertracing.io/inject": "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scepextension
+  template:
+    metadata:
+      labels:
+        app: scepextension
+    spec:
+      containers:
+        - name: scepextension
+          image: scepextension:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8088
+          volumeMounts:
+            - name: certs
+              mountPath: "/certs"
+          env:
+            - name: SCEPEXTENSION_PORT
+              value: "8088"
+            - name: SCEPEXTENSION_CONSULPROTOCOL
+              value: "https"
+            - name: SCEPEXTENSION_CONSULHOST
+              value: "consul-server"
+            - name: SCEPEXTENSION_CONSULPORT
+              value: "8501"
+            - name: SCEPEXTENSION_CONSULCA
+              value: "/certs/consul.crt"
+            - name: SCEPEXTENSION_CERTFILE
+              value: "/certs/extension.crt"
+            - name: SCEPEXTENSION_KEYFILE
+              value: "/certs/extension.key"
+            - name: SCEPEXTENSION_SERVERPORT
+              value: "8088"
+            - name: SCEPEXTENSION_SCEPMAPPING
+              value: "Lamassu-Root-CA1-RSA4096:scepca1,Lamassu-Root-CA2-RSA2048:scepca2,Lamassu-Root-CA3-ECC384:scepca3,Lamassu-Root-CA4-ECC256:scepca4"
+            - name: SCEPEXTENSION_PROXYHOST
+              value: "scepproxy"
+            - name: SCEPEXTENSION_PROXYPORT
+              value: "443"
+            - name: SCEPEXTENSION_PROXYCA
+              value: "/certs/scepproxy.crt"  
+            - name: JAEGER_SERVICE_NAME
+              value: "scepextension"
+            - name: JAEGER_AGENT_HOST
+              value: "localhost"
+            - name: JAEGER_AGENT_PORT
+              value: "6831"
+      volumes:
+        - name: certs
+          secret:
+            secretName: scepextension-certs

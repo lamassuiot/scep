@@ -1,6 +1,7 @@
 package consul
 
 import (
+	"math/rand"
 	"strconv"
 
 	"github.com/micromdm/scep/discovery"
@@ -13,13 +14,13 @@ import (
 
 type ServiceDiscovery struct {
 	client    consulsd.Client
-	proxyHost string
-	proxyPort string
 	logger    log.Logger
 	registrar *consulsd.Registrar
+	proxyHost string
+	proxyPort string
 }
 
-func NewServiceDiscovery(consulProtocol string, consulHost string, consulPort string, CA string, logger log.Logger) (discovery.Service, error) {
+func NewServiceDiscovery(proxyHost string, proxyPort string, consulProtocol string, consulHost string, consulPort string, CA string, logger log.Logger) (discovery.Service, error) {
 	consulConfig := api.DefaultConfig()
 	consulConfig.Address = consulProtocol + "://" + consulHost + ":" + consulPort
 	tlsConf := &api.TLSConfig{CAFile: CA}
@@ -30,24 +31,25 @@ func NewServiceDiscovery(consulProtocol string, consulHost string, consulPort st
 		return nil, err
 	}
 	client := consulsd.NewClient(consulClient)
-	return &ServiceDiscovery{client: client, logger: logger}, nil
+	return &ServiceDiscovery{client: client, logger: logger, proxyHost: proxyHost, proxyPort: proxyPort}, nil
 }
 
 func (sd *ServiceDiscovery) Register(advProtocol string, advHost string, advPort string) error {
 	check := api.AgentServiceCheck{
-		HTTP:          advProtocol + "://" + advHost + ":" + advPort + "/health",
+		HTTP:          advProtocol + "://" + advHost + ":" + advPort + "/v1/health",
 		Interval:      "10s",
 		Timeout:       "1s",
 		TLSSkipVerify: true,
 		Notes:         "Basic health checks",
 	}
-	port, _ := strconv.Atoi(advPort)
+	port, _ := strconv.Atoi(sd.proxyPort)
+	num := rand.Intn(100)
 	asr := api.AgentServiceRegistration{
-		ID:      advHost,
-		Name:    advHost,
-		Address: advHost,
+		ID:      "scepextension" + strconv.Itoa(num),
+		Name:    "scepextension",
+		Address: sd.proxyHost,
 		Port:    port,
-		Tags:    []string{"scep", advHost},
+		Tags:    []string{"scep", "extension"},
 		Check:   &check,
 	}
 	sd.registrar = consulsd.NewRegistrar(sd.client, &asr, sd.logger)

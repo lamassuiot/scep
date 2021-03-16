@@ -17,7 +17,9 @@ minikube kubectl -- create secret generic proxy-server-certs --from-file=./proxy
 minikube kubectl -- create secret generic proxy-client-certs --from-file=./proxy/client/certs/enroller.crt
 
 minikube kubectl -- create secret generic scep-ca --from-file=./ca/ca.pem --from-file=./ca/ca.key
-minikube kubectl -- create secret generic scep-certs --from-file=./certs/consul.crt
+minikube kubectl -- create secret generic scep-certs --from-file=./certs/consul.crt --from-file=./certs/vault.crt
+
+minikube kubectl -- create secret generic scepextension-certs --from-file=./certs/consul.crt --from-file=./certs/extension.crt --from-file=./certs/extension.key --from-file=./certs/scepproxy.crt
 
 minikube kubectl -- create secret generic scepca1-vault-secrets --from-literal=roleid=$CA1_ROLEID --from-literal=secretid=$CA1_SECRETID
 minikube kubectl -- create secret generic scepca2-vault-secrets --from-literal=roleid=$CA2_ROLEID --from-literal=secretid=$CA2_SECRETID
@@ -26,6 +28,9 @@ minikube kubectl -- create secret generic scepca4-vault-secrets --from-literal=r
 
 minikube kubectl -- apply -f k8s/scepproxy-deployment.yml
 minikube kubectl -- apply -f k8s/scepproxy-service.yml
+
+minikube kubectl -- apply -f k8s/scepextension-deployment.yml
+minikube kubectl -- apply -f k8s/scepextension-service.yml
 
 minikube kubectl -- apply -f k8s/scepdb-pv.yml
 minikube kubectl -- apply -f k8s/scepdb-deployment.yml

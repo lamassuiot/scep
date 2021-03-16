@@ -66,10 +66,11 @@ func main() {
 		flPort              = flag.String("port", envString("SCEP_HTTP_LISTEN_PORT", "8080"), "port to listen on")
 		flDepotPath         = flag.String("depot", envString("SCEP_FILE_DEPOT", "depot"), "path to ca folder")
 		flCAPass            = flag.String("capass", envString("SCEP_CA_PASS", ""), "password for the ca.key")
-		flVaultAddress      = flag.String("vaultaddress", envString("SCEP_VAULT_ADDRESS", "vault"), "vault address")
-		flVaultCA           = flag.String("vaultca", envString("SCEP_VAULT_CA", "Lamassu-Root-CA1-RSA4096"), "vault CA")
-		flRoleID            = flag.String("roleid", envString("SCEP_ROLE_ID", ""), "vault RoleID")
-		flSecretID          = flag.String("secretid", envString("SCEP_SECRET_ID", ""), "vault SecretID")
+		flVaultAddress      = flag.String("vaultaddress", envString("SCEP_VAULT_ADDRESS", "vault"), "Vault address")
+		flVaultCA           = flag.String("vaultca", envString("SCEP_VAULT_CA", "Lamassu-Root-CA1-RSA4096"), "Vault CA")
+		flVaultCACert       = flag.String("vaultcacert", envString("SCEP_VAULT_CA_CERT", ""), "Vault CA certificate")
+		flRoleID            = flag.String("roleid", envString("SCEP_ROLE_ID", ""), "Vault RoleID")
+		flSecretID          = flag.String("secretid", envString("SCEP_SECRET_ID", ""), "Vault SecretID")
 		flHomePath          = flag.String("homepath", envString("SCEP_HOME_PATH", ""), "home path")
 		flDBName            = flag.String("dbname", envString("SCEP_DB_NAME", "ca_store"), "DB name")
 		flDBUser            = flag.String("dbuser", envString("SCEP_DB_USER", "scep"), "DB user")
@@ -80,8 +81,6 @@ func main() {
 		flConsulHost        = flag.String("consulhost", envString("SCEP_CONSULHOST", ""), "Consul host")
 		flConsulPort        = flag.String("consulport", envString("SCEP_CONSULPORT", ""), "Consul port")
 		flConsulCA          = flag.String("consulca", envString("SCEP_CONSULCA", ""), "Consul CA path")
-		flProxyHost         = flag.String("proxyhost", envString("SCEP_PROXYHOST", "scepproxy"), "server proxy hostname")
-		flProxyPort         = flag.String("proxyport", envString("SCEP_PROXYPORT", "8088"), "server proxy port")
 		flClDuration        = flag.String("crtvalid", envString("SCEP_CERT_VALID", "365"), "validity for new client certificates in days")
 		flClAllowRenewal    = flag.String("allowrenew", envString("SCEP_CERT_RENEW", "14"), "do not allow renewal until n days before expiry, set to 0 to always allow")
 		flChallengePassword = flag.String("challenge", envString("SCEP_CHALLENGE_PASSWORD", ""), "enforce a challenge password")
@@ -126,7 +125,7 @@ func main() {
 
 	var caSecrets casecrets.CASecrets
 	{
-		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID, *flVaultCA, lginfo)
+		caSecrets, err = vault.NewVaultSecrets(*flVaultAddress, *flRoleID, *flSecretID, *flVaultCA, *flVaultCACert, lginfo)
 		if err != nil {
 			level.Error(lginfo).Log("err", err, "msg", "Could not start connection with CA Vault Secret Engine")
 			os.Exit(1)
@@ -224,7 +223,7 @@ func main() {
 			svc)
 	}
 
-	consulsd, err := consul.NewServiceDiscovery(*flConsulProtocol, *flConsulHost, *flConsulPort, *flProxyHost, *flProxyPort, *flConsulCA, logger)
+	consulsd, err := consul.NewServiceDiscovery(*flConsulProtocol, *flConsulHost, *flConsulPort, *flConsulCA, logger)
 	if err != nil {
 		level.Error(lginfo).Log("err", err, "msg", "Could not start connection with Consul Service Discovery")
 		os.Exit(1)
