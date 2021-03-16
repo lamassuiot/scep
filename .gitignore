@@ -1,7 +1,6 @@
 .DS_Store
 cmd/scepserver/scepserver
 cmd/scepclient/scepclient
-build/
 vendor/
 dummy_ca/
 .vscode/
